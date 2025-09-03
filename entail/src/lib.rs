@@ -1,8 +1,9 @@
 pub use entail_derive::Entail;
 use std::{borrow::Cow, fmt};
 
-pub trait EntityModel {
+pub trait EntityModel: Sized {
     fn to_ds_entity(&self) -> Result<ds::Entity, EntailError>;
+    fn from_ds_entity(e: &ds::Entity) -> Result<Self, EntailError>;
 }
 
 #[derive(Debug)]

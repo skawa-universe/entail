@@ -1,7 +1,7 @@
 use darling::{FromField, FromDeriveInput};
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, GenericArgument, PathArguments, Type, Ident};
+use syn::{parse_macro_input, DeriveInput, GenericArgument, PathArguments, Type, Ident, Fields, Field};
 use syn::spanned::Spanned;
 use convert_case::{Case, Casing};
 
@@ -260,8 +260,13 @@ struct ParsedField<'a> {
     property_name: String,
 }
 
+struct ParsedFieldPair<'a> {
+    field: &'a Field,
+    parsed_field: Option<ParsedField<'a>>,
+}
+
 impl<'a> ParsedField<'a> {
-    fn build(f: &'a syn::Field, c: &'a EntailContainerAttribute) -> Option<Self> {
+    fn build(f: &'a Field, c: &'a EntailContainerAttribute) -> Option<Self> {
         // Check if the field is named
         let name = f.ident.as_ref()?;
 
@@ -318,6 +323,11 @@ impl<'a> ParsedField<'a> {
     }
 }
 
+fn create_err(text: &str, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+    let err_str = syn::LitStr::new(text, span);
+    quote! { Err(entail::EntailError { message: #err_str.into() }) }
+}
+
 #[proc_macro_derive(Entail, attributes(entail))]
 pub fn derive_entail(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -334,12 +344,15 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
             &raw_name
         }, name.span());
     let fields = match &input.data {
-        syn::Data::Struct(syn::DataStruct { fields: syn::Fields::Named(fields), .. }) => &fields.named,
+        syn::Data::Struct(syn::DataStruct { fields: Fields::Named(fields), .. }) => &fields.named,
         _ => panic!("Entail can only be derived for structs with named fields"),
     };
 
-    let parsed_fields: Vec<ParsedField> = fields.iter()
-        .filter_map(|f| { ParsedField::build(&f, &entail_input) })
+    let all_fields: Vec<ParsedFieldPair> = fields.iter()
+        .map(|field| ParsedFieldPair { field, parsed_field: ParsedField::build(&field, &entail_input) })
+        .collect();
+    let parsed_fields: Vec<&ParsedField> = all_fields.iter()
+        .filter_map(|f| { f.parsed_field.as_ref() })
         .collect();
     let key_field: &ParsedField = parsed_fields.iter()
         .filter(|pf| pf.attrs.key || !pf.attrs.field && pf.name.to_string() == "key")
@@ -355,7 +368,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     }
 
     let key_field_name: &Ident = key_field.name;
-    let key_initializer: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.ty_path) || is_string_type(key_field.ty_path) {
+    let entity_key_new: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.ty_path) || is_string_type(key_field.ty_path) {
         if key_field.is_nullable() {
             quote! {
                 match &self.#key_field_name {
@@ -398,10 +411,11 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         panic!("Invalid key type at {:?}", &key_field.ty_path.span());
     };
 
-    let set_properties: Vec<proc_macro2::TokenStream> = parsed_fields.iter().map(|f| {
+    let set_properties: Vec<proc_macro2::TokenStream> = parsed_fields.iter().filter_map(|double_ref_field| {
+        let f: &ParsedField = *double_ref_field;
         if std::ptr::eq(key_field, f) {
             // the key is handled separately
-            return quote! { };
+            return None;
         }
         let name: &proc_macro2::Ident = f.name;
         let property_name_lit: syn::LitStr = f.create_property_name_lit();
@@ -418,20 +432,20 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         macro_rules! gen_setter {
                 ($ds_value:ident, $conversion:tt) => {
                     if nullable {
-                        quote! {
+                        Some(quote! {
                             e.#setter(#property_name_lit, match &self.#name {
                                 Some(val) => entail::ds::Value::$ds_value($conversion),
                                 None => entail::ds::Value::null(),
                             });
-                        }
+                        })
                     } else if array {
-                        quote! {
+                        Some(quote! {
                             e.#setter(#property_name_lit, entail::ds::Value::array(self.#name.iter()
                                 .map(|val| entail::ds::Value::$ds_value($conversion))
                                 .collect()));
-                        }
+                        })
                     } else {
-                        quote! {{ let val = &self.#name; e.#setter(#property_name_lit, entail::ds::Value::$ds_value($conversion)); }}
+                        Some(quote! {{ let val = &self.#name; e.#setter(#property_name_lit, entail::ds::Value::$ds_value($conversion)); }})
                     }
                 }
         }
@@ -451,19 +465,131 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         } else if is_key_type(path) {
             gen_setter!(key, (val.clone()))
         } else {
-            quote! { }
+            None
+        }
+    }).collect();
+
+    let key_value: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.ty_path) || is_string_type(key_field.ty_path) {
+        if key_field.is_nullable() {
+            quote! { e.key().name().map(|name| String::from(name).into()) }
+        } else {
+            quote! { String::from(e.key().name().unwrap()).into() }
+        }
+    } else if key_field.ty_path.is_ident("i64") {
+        if key_field.is_nullable() {
+            quote! { e.key().id() }
+        } else {
+            quote! { e.key().id().unwrap() }
+        }
+    } else if is_key_type(key_field.ty_path) {
+        if key_field.is_nullable() {
+            quote! { Some(e.key().clone()) }
+        } else {
+            quote! { e.key().clone() }
+        }
+    } else {
+        panic!("Invalid key type at {:?}", &key_field.ty_path.span());
+    };
+    let key_initializer = quote! { #key_field_name: #key_value };
+
+    let initializers: Vec<proc_macro2::TokenStream> = all_fields.iter().filter_map(|pair| {
+        if let Some(f) = pair.parsed_field.as_ref() {
+            if std::ptr::eq(key_field, f) {
+                // the key is handled separately
+                return None;
+            }
+            let name: &Ident = f.name;
+            let property_name_lit: syn::LitStr = f.create_property_name_lit();
+            let nullable: bool = f.is_nullable();
+            let array: bool = f.is_array();
+            let path: &syn::Path = f.type_path();
+            let model_name = &raw_name;
+
+            macro_rules! gen_initializer {
+                    ($ds_value:ident, $conversion:tt) => {
+                        if nullable {
+                            let err = create_err(format!("Expected null or a value of {} in {}.{}", stringify!($ds_value), model_name, f.property_name).as_str(), name.span());
+                            quote! {
+                                match e.get(#property_name_lit).unwrap_or(&null_value) {
+                                    entail::ds::Value::Null => None,
+                                    entail::ds::Value::$ds_value(val) => Some($conversion),
+                                    _ => return #err,
+                                }
+                            }
+                        } else if array {
+                            let err = create_err(format!("Expected null, an array or single value of {} in {}.{}", stringify!($ds_value), model_name, f.property_name).as_str(), name.span());
+                            quote! {
+                                match e.get(#property_name_lit).unwrap_or(&null_value) {
+                                    entail::ds::Value::Null => vec![],
+                                    entail::ds::Value::$ds_value(val) => vec![$conversion],
+                                    entail::ds::Value::Array(arr) => {
+                                        arr.iter().try_fold(Vec::<#path>::new(), |mut acc, item| match &item {
+                                            entail::ds::Value::$ds_value(val) => {
+                                                acc.push($conversion);
+                                                Ok(acc)
+                                            },
+                                            _ => #err
+                                        })?
+                                    },
+                                    _ => return #err
+                                }
+                            }
+                        } else {
+                            let err = create_err(format!("Expected a value of {} in {}.{}", stringify!($ds_value), model_name, f.property_name).as_str(), name.span());
+                            quote! {
+                                match e.get(#property_name_lit).unwrap_or(&null_value) {
+                                    entail::ds::Value::$ds_value(val) => $conversion,
+                                    _ => return #err,
+                                }
+                            }
+                        }
+                    }
+            }
+            let initializer = 
+                // blob is not implemented yet
+                if is_string_type(path) {
+                    gen_initializer!(UnicodeString, (String::from(val.as_ref())))
+                } else if is_cow_static_str_type(path) {
+                    gen_initializer!(UnicodeString, val)
+                } else if is_integer_type(path) {
+                    gen_initializer!(Integer, (*val as #path))
+                } else if path.is_ident("f32") || path.is_ident("f64") {
+                    gen_initializer!(FloatingPoint, (*val as #path))
+                } else if path.is_ident("bool") {
+                    gen_initializer!(Boolean, val)
+                } else if is_key_type(path) {
+                    gen_initializer!(Key, (val.clone()))
+                } else {
+                    panic!("Unexpected type: {:?}", path);
+                };
+
+            Some(quote! { #name: #initializer, })
+        } else {
+            let field: &Field = pair.field;
+            let name: &Ident = field.ident.as_ref().unwrap();
+            Some(quote! { #name: ::std::default::Default::default(), })
         }
     }).collect();
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
     let generated = quote! {
         impl #impl_generics entail::EntityModel for #name #type_generics #where_clause {
+            fn from_ds_entity(e: &entail::ds::Entity) -> Result<Self, entail::EntailError> {
+                let null_value = entail::ds::Value::Null;
+                Ok(Self {
+                    #key_initializer,
+                    #(#initializers)*
+                })
+            }
+
             fn to_ds_entity(&self) -> Result<entail::ds::Entity, entail::EntailError> {
-                let mut e = entail::ds::Entity::new(#key_initializer);
+                let mut e = entail::ds::Entity::new(#entity_key_new);
                 #(#set_properties)*
                 Ok(e)
             }
         }
     };
+
+    // println!("{}", generated);
 
     generated.into()
 }
