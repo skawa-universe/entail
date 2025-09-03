@@ -39,7 +39,7 @@ fn code_gen() {
     lookup: vec![String::from("wow"), String::from("such"), String::from("index")],
     related: None,
   };
-  let e = model.to_ds_entity().unwrap();
+  let mut e = model.to_ds_entity().unwrap();
   println!("{}", e);
   assert!(e.is_indexed("someField"));
   assert!(!e.is_indexed("key"));
@@ -53,6 +53,13 @@ fn code_gen() {
     ds::Value::unicode_string("index"),
   ])).as_ref());
   assert_eq!(e.get("related"), Some(ds::Value::null()).as_ref());
-  let new_model = Model::from_ds_entity(&e);
+  let related_key = ds::Key::new("Bizz").with_name("buzz");
+  e.set_indexed("related", ds::Value::key(related_key.clone()));
+  let new_model = Model::from_ds_entity(&e).expect("Cannot create from entity");
+  assert_eq!(new_model.name, model.name);
+  assert_eq!(new_model.some_field, model.some_field);
+  assert_eq!(new_model.key, model.key);
+  assert_eq!(new_model.lookup, model.lookup);
+  assert_eq!(new_model.related.as_ref(), Some(&related_key));
   println!("{:?}", new_model);
 }
