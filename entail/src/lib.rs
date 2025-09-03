@@ -31,7 +31,11 @@ pub mod ds {
 
     impl Key {
         pub fn new(kind: impl Into<Cow<'static, str>>) -> Self {
-            Key { kind: kind.into(), variant: KeyVariant::Incomplete, parent: None }
+            Key {
+                kind: kind.into(),
+                variant: KeyVariant::Incomplete,
+                parent: None,
+            }
         }
 
         pub fn kind(&self) -> &str {
@@ -59,23 +63,38 @@ pub mod ds {
         }
 
         pub fn with_name(self, name: impl Into<Cow<'static, str>>) -> Self {
-            Key { variant: KeyVariant::Name(name.into()), ..self }
+            Key {
+                variant: KeyVariant::Name(name.into()),
+                ..self
+            }
         }
 
         pub fn with_id(self, id: i64) -> Self {
-            Key { variant: KeyVariant::Id(id), ..self }
+            Key {
+                variant: KeyVariant::Id(id),
+                ..self
+            }
         }
 
         pub fn with_parent(self, parent: Key) -> Self {
-            Key { parent: Some(Box::new(parent)), ..self }
+            Key {
+                parent: Some(Box::new(parent)),
+                ..self
+            }
         }
 
         pub fn with_no_parent(self) -> Self {
-            Key { parent: None, ..self }
+            Key {
+                parent: None,
+                ..self
+            }
         }
 
         pub fn with_boxed_parent(self, parent: Option<Box<Key>>) -> Self {
-            Key { parent: parent, ..self }
+            Key {
+                parent: parent,
+                ..self
+            }
         }
     }
 
@@ -90,17 +109,17 @@ pub mod ds {
                 KeyVariant::Name(name) => {
                     let lit = serde_json::to_string(&name).map_err(|_| fmt::Error)?;
                     write!(f, "name:{})", lit)
-                },
+                }
                 KeyVariant::Id(id) => {
                     write!(f, "id:{})", id)
-                },
+                }
                 KeyVariant::Incomplete => {
                     write!(f, ")")
                 }
             }
         }
     }
-    
+
     #[derive(PartialEq, Debug)]
     pub enum Value {
         Null,
@@ -114,7 +133,9 @@ pub mod ds {
     }
 
     impl Value {
-        pub fn null() -> Value { Value::Null }
+        pub fn null() -> Value {
+            Value::Null
+        }
 
         pub fn integer(val: i64) -> Value {
             Value::Integer(val)
@@ -182,7 +203,7 @@ pub mod ds {
                     }
                     write!(f, "]")?;
                     Ok(())
-                },
+                }
                 Value::Key(key) => write!(f, "key({})", key),
             }
         }
@@ -213,11 +234,17 @@ pub mod ds {
 
     impl Entity {
         pub fn new(key: Key) -> Self {
-            Self { key, properties: HashMap::new() }
+            Self {
+                key,
+                properties: HashMap::new(),
+            }
         }
 
         pub fn of_kind(kind: impl Into<Cow<'static, str>>) -> Self {
-            Self { key: Key::new(kind), properties: HashMap::new() }
+            Self {
+                key: Key::new(kind),
+                properties: HashMap::new(),
+            }
         }
 
         pub fn key(&self) -> &Key {
@@ -229,21 +256,38 @@ pub mod ds {
             self
         }
 
-        pub fn set(&mut self, name: impl Into<Cow<'static, str>>, value: Value, indexed: bool) -> &mut Self {
-            self.properties.insert(name.into(), PropertyValue { value, indexed });
+        pub fn set(
+            &mut self,
+            name: impl Into<Cow<'static, str>>,
+            value: Value,
+            indexed: bool,
+        ) -> &mut Self {
+            self.properties
+                .insert(name.into(), PropertyValue { value, indexed });
             self
         }
 
-        pub fn set_unindexed(&mut self, name: impl Into<Cow<'static, str>>, value: Value) -> &mut Self {
+        pub fn set_unindexed(
+            &mut self,
+            name: impl Into<Cow<'static, str>>,
+            value: Value,
+        ) -> &mut Self {
             self.set(name, value, false)
         }
 
-        pub fn set_indexed(&mut self, name: impl Into<Cow<'static, str>>, value: Value) -> &mut Self {
+        pub fn set_indexed(
+            &mut self,
+            name: impl Into<Cow<'static, str>>,
+            value: Value,
+        ) -> &mut Self {
             self.set(name, value, true)
         }
 
         pub fn is_indexed(&self, name: &str) -> bool {
-            self.properties.get(name).map(|v| v.indexed).unwrap_or(false)
+            self.properties
+                .get(name)
+                .map(|v| v.indexed)
+                .unwrap_or(false)
         }
 
         pub fn get(&self, name: &str) -> Option<&Value> {
@@ -261,13 +305,11 @@ pub mod ds {
             write!(f, "\n}}")
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
-    use super::ds::*; 
+    use super::ds::*;
 
     #[test]
     fn test_key_building() {
@@ -289,7 +331,9 @@ mod tests {
         assert_eq!(key3.id(), Some(123));
         assert_eq!(key3.parent(), None);
         assert_eq!(key3.to_string(), "Foo(id:123)");
-        let key4 = Key::new("Bar").with_name("child").with_parent(Key::new("Foo").with_name("parent"));
+        let key4 = Key::new("Bar")
+            .with_name("child")
+            .with_parent(Key::new("Foo").with_name("parent"));
         assert_eq!(key4.kind(), "Bar");
         assert_eq!(key4.name(), Some("child"));
         assert_eq!(key4.id(), None);
@@ -305,26 +349,39 @@ mod tests {
 
     #[test]
     fn test_entity_building() {
-        let key = Key::new("Bizz").with_id(1234).with_parent(
-            Key::new("Foo").with_name("parent_name")
-        );
+        let key = Key::new("Bizz")
+            .with_id(1234)
+            .with_parent(Key::new("Foo").with_name("parent_name"));
         let mut entity = Entity::new(key);
-        entity.set_indexed("name", Value::unicode_string("Some Name"))
-            .set_unindexed("description", Value::unicode_string("A long description that is not indexed."))
+        entity
+            .set_indexed("name", Value::unicode_string("Some Name"))
+            .set_unindexed(
+                "description",
+                Value::unicode_string("A long description that is not indexed."),
+            )
             .set_indexed("is_active", Value::boolean(true))
             .set_indexed("score", Value::floating_point(99.9))
             .set_unindexed("data_blob", Value::blob(vec![1, 2, 3, 4, 5]))
-            .set_indexed("tags", Value::array(vec![
-                Value::UnicodeString("rust".into()),
-                Value::UnicodeString("programming".into()),
-                Value::UnicodeString("datastore".into()),
-            ]))
-            .set_indexed("related_key", Value::key(Key::new("RelatedKind").with_id(5678)));
+            .set_indexed(
+                "tags",
+                Value::array(vec![
+                    Value::UnicodeString("rust".into()),
+                    Value::UnicodeString("programming".into()),
+                    Value::UnicodeString("datastore".into()),
+                ]),
+            )
+            .set_indexed(
+                "related_key",
+                Value::key(Key::new("RelatedKind").with_id(5678)),
+            );
         println!("{}", entity);
 
         assert_eq!(entity.key().kind(), "Bizz");
         assert_eq!(entity.key().id(), Some(1234));
-        assert_eq!(entity.get("name").and_then(|v| v.string_value()), Some("Some Name"));
+        assert_eq!(
+            entity.get("name").and_then(|v| v.string_value()),
+            Some("Some Name")
+        );
         assert_eq!(entity.is_indexed("name"), true);
         assert_eq!(entity.is_indexed("description"), false);
         assert_eq!(entity.is_indexed("is_active"), true);
@@ -334,4 +391,3 @@ mod tests {
         assert_eq!(entity.is_indexed("non_existent_property"), false);
     }
 }
-
