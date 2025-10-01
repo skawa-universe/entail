@@ -240,9 +240,7 @@ impl Value {
 
 impl Into<Value> for google_datastore1::api::Value {
     fn into(self) -> Value {
-        if let Some(_) = self.null_value {
-            Value::Null
-        } else if let Some(integer_value) = self.integer_value {
+        if let Some(integer_value) = self.integer_value {
             Value::Integer(integer_value)
         } else if let Some(boolean_value) = self.boolean_value {
             Value::Boolean(boolean_value)
@@ -262,10 +260,14 @@ impl Into<Value> for google_datastore1::api::Value {
             Value::Array(values)
         } else if let Some(key_value) = self.key_value {
             Value::Key(key_value.into())
-        } else {
+        } else if (self.entity_value.is_some() || self.geo_point_value.is_some() || self.timestamp_value.is_some()) {
             // Panic for unsupported types like `entityValue`, `geoPointValue`,
             // `timestampValue`, and others.
             panic!("Unsupported Datastore value type");
+        } else {
+            // Sometimes Cloud Datastore sends `{}`` as value JSON instead of null, but this
+            // branch covers the normal null value case (`{"nullValue": "NULL_VALUE"}``)
+            Value::Null
         }
     }
 }
