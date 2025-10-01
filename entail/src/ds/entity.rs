@@ -117,10 +117,10 @@ impl Into<google_datastore1::api::Key> for Key {
     }
 }
 
-impl Into<Entity> for google_datastore1::api::Entity {
-    fn into(self) -> Entity {
-        let mut result = Entity::new(self.key.expect("Missing key").into());
-        if let Some(props) = self.properties {
+impl From<google_datastore1::api::Entity> for Entity {
+    fn from(value: google_datastore1::api::Entity) -> Entity {
+        let mut result = Entity::new(value.key.expect("Missing key").into());
+        if let Some(props) = value.properties {
             for (key, value) in props.into_iter() {
                 let indexed = value.exclude_from_indexes.unwrap_or(false);
                 result.set(key, value.into(), indexed);
@@ -130,10 +130,10 @@ impl Into<Entity> for google_datastore1::api::Entity {
     }
 }
 
-impl Into<Key> for google_datastore1::api::Key {
-    fn into(self) -> Key {
+impl From<google_datastore1::api::Key> for Key {
+    fn from(value: google_datastore1::api::Key) -> Key {
         let mut key_opt = None;
-        for element in self.path.expect("Missing key path") {
+        for element in value.path.expect("Missing key path") {
             let mut key = Key::new(element.kind.expect("Kindless key"));
             if let Some(id) = element.id {
                 key = key.with_id(id);
@@ -260,7 +260,7 @@ impl Into<Value> for google_datastore1::api::Value {
             Value::Array(values)
         } else if let Some(key_value) = self.key_value {
             Value::Key(key_value.into())
-        } else if (self.entity_value.is_some() || self.geo_point_value.is_some() || self.timestamp_value.is_some()) {
+        } else if self.entity_value.is_some() || self.geo_point_value.is_some() || self.timestamp_value.is_some() {
             // Panic for unsupported types like `entityValue`, `geoPointValue`,
             // `timestampValue`, and others.
             panic!("Unsupported Datastore value type");
