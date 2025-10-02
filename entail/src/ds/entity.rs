@@ -204,7 +204,7 @@ impl fmt::Display for Key {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Value {
     Null,
     Integer(i64),
@@ -271,19 +271,19 @@ impl Value {
     }
 }
 
-impl Into<Value> for google_datastore1::api::Value {
-    fn into(self) -> Value {
-        if let Some(integer_value) = self.integer_value {
+impl From<google_datastore1::api::Value> for Value {
+    fn from(value: google_datastore1::api::Value) -> Self {
+        if let Some(integer_value) = value.integer_value {
             Value::Integer(integer_value)
-        } else if let Some(boolean_value) = self.boolean_value {
+        } else if let Some(boolean_value) = value.boolean_value {
             Value::Boolean(boolean_value)
-        } else if let Some(blob_value) = self.blob_value {
+        } else if let Some(blob_value) = value.blob_value {
             Value::Blob(Cow::Owned(blob_value))
-        } else if let Some(string_value) = self.string_value {
+        } else if let Some(string_value) = value.string_value {
             Value::UnicodeString(Cow::Owned(string_value))
-        } else if let Some(double_value) = self.double_value {
+        } else if let Some(double_value) = value.double_value {
             Value::FloatingPoint(double_value)
-        } else if let Some(array_value) = self.array_value {
+        } else if let Some(array_value) = value.array_value {
             let values: Vec<Value> = array_value
                 .values
                 .unwrap_or_default()
@@ -291,9 +291,9 @@ impl Into<Value> for google_datastore1::api::Value {
                 .map(|e| e.into())
                 .collect();
             Value::Array(values)
-        } else if let Some(key_value) = self.key_value {
+        } else if let Some(key_value) = value.key_value {
             Value::Key(key_value.into())
-        } else if self.entity_value.is_some() || self.geo_point_value.is_some() || self.timestamp_value.is_some() {
+        } else if value.entity_value.is_some() || value.geo_point_value.is_some() || value.timestamp_value.is_some() {
             // Panic for unsupported types like `entityValue`, `geoPointValue`,
             // `timestampValue`, and others.
             panic!("Unsupported Datastore value type");
@@ -302,6 +302,48 @@ impl Into<Value> for google_datastore1::api::Value {
             // branch covers the normal null value case (`{"nullValue": "NULL_VALUE"}``)
             Value::Null
         }
+    }
+}
+
+impl Into<google_datastore1::api::Value> for Value {
+    fn into(self) -> google_datastore1::api::Value {
+        let mut ds_value = google_datastore1::api::Value::default(); 
+
+        match self {
+            Value::Null => {
+                // Datastore API requires the string "NULL_VALUE" for null values.
+                ds_value.null_value = Some("NULL_VALUE".to_string());
+            }
+            Value::Integer(i) => {
+                ds_value.integer_value = Some(i);
+            }
+            Value::Boolean(b) => {
+                ds_value.boolean_value = Some(b);
+            }
+            Value::Blob(b) => {
+                // Convert Cow<'static, [u8]> to Vec<u8>
+                ds_value.blob_value = Some(b.into_owned());
+            }
+            Value::UnicodeString(s) => {
+                // Convert Cow<'static, str> to String
+                ds_value.string_value = Some(s.into_owned());
+            }
+            Value::FloatingPoint(f) => {
+                ds_value.double_value = Some(f);
+            }
+            Value::Key(k) => {
+                ds_value.key_value = Some(k.into());
+            }
+            Value::Array(values) => {
+                // Recursively convert inner elements back to DatastoreValue
+                let ds_elements = values.into_iter().map(Value::into).collect();
+                ds_value.array_value = Some(google_datastore1::api::ArrayValue {
+                    values: Some(ds_elements),
+                });
+            }
+        }
+
+        ds_value
     }
 }
 
