@@ -83,14 +83,23 @@ impl Key {
         }
     }
 
-    fn push_path_elements(self, out: &mut Vec<google_datastore1::api::PathElement>) {
-        if let Some(parent) = self.parent {
+    pub fn to_api(&self) -> google_datastore1::api::Key {
+        let mut path = Vec::new();
+        self.push_path_elements(&mut path);
+        google_datastore1::api::Key {
+            partition_id: None,
+            path: Some(path),
+        }
+    }
+
+    fn push_path_elements(&self, out: &mut Vec<google_datastore1::api::PathElement>) {
+        if let Some(parent) = &self.parent {
             parent.push_path_elements(out);
         }
-        out.push(match self.variant {
+        out.push(match &self.variant {
             KeyVariant::Id(id) => google_datastore1::api::PathElement {
                 kind: Some(self.kind.to_string()),
-                id: Some(id),
+                id: Some(*id),
                 ..Default::default()
             },
             KeyVariant::Name(name) => google_datastore1::api::PathElement {
@@ -104,12 +113,36 @@ impl Key {
             },
         });
     }
+
+    fn consume_and_push_path_elements(self, out: &mut Vec<google_datastore1::api::PathElement>) {
+        if let Some(parent) = &self.parent {
+            parent.push_path_elements(out);
+        }
+        
+        let kind = self.kind.into_owned();
+        out.push(match self.variant {
+            KeyVariant::Id(id) => google_datastore1::api::PathElement {
+                kind: Some(kind),
+                id: Some(id),
+                ..Default::default()
+            },
+            KeyVariant::Name(name) => google_datastore1::api::PathElement {
+                kind: Some(kind),
+                name: Some(name.into_owned()),
+                ..Default::default()
+            },
+            KeyVariant::Incomplete => google_datastore1::api::PathElement {
+                kind: Some(kind),
+                ..Default::default()
+            },
+        });
+    }
 }
 
 impl Into<google_datastore1::api::Key> for Key {
     fn into(self) -> google_datastore1::api::Key {
         let mut path = Vec::new();
-        self.push_path_elements(&mut path);
+        self.consume_and_push_path_elements(&mut path);
         google_datastore1::api::Key {
             partition_id: None,
             path: Some(path),

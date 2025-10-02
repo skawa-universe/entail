@@ -12,10 +12,12 @@ use hyper_util::rt::TokioExecutor;
 use std::error::Error;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct DatastoreShell {
     pub project_id: String,
     pub hub: Arc<Datastore<HttpsConnector<HttpConnector>>>,
     pub database_id: Option<String>,
+    pub transaction: Option<Vec<u8>>,
 }
 
 impl DatastoreShell {
@@ -58,7 +60,16 @@ impl DatastoreShell {
             project_id: project_id.to_string(),
             hub: Arc::new(hub),
             database_id,
+            transaction: None,
         })
+    }
+
+    fn build_read_options(&self) -> ReadOptions {
+        ReadOptions {
+            read_consistency: Some("STRONG".into()),
+            transaction: self.transaction.clone(),
+            ..Default::default()
+        }
     }
 
     pub async fn get_single(&self, key: ds::Key) -> Result<Option<ds::Entity>, EntailError> {
@@ -66,10 +77,7 @@ impl DatastoreShell {
         let lookup = LookupRequest {
             database_id: self.database_id.clone(),
             keys: Some(vec![native_key]),
-            read_options: Some(ReadOptions {
-                read_consistency: Some("STRONG".into()),
-                ..Default::default()
-            }),
+            read_options: Some(self.build_read_options()),
             ..Default::default()
         };
         let response = self
@@ -91,6 +99,45 @@ impl DatastoreShell {
                 message: "Lookup error".into(),
                 ds_error: Some(err),
             }),
+        }
+    }
+
+    pub async fn get_all(&self, keys: &[ds::Key]) -> Result<Vec<ds::Entity>, EntailError> {
+        let mut native_keys = keys.iter().map(|key| key.to_api()).collect();
+        loop {
+            let lookup = LookupRequest {
+                database_id: self.database_id.clone(),
+                keys: Some(native_keys),
+                read_options: Some(self.build_read_options()),
+                ..Default::default()
+            };
+            let response = self
+                .hub
+                .projects()
+                .lookup(lookup, &self.project_id)
+                .doit()
+                .await;
+            match response {
+                Ok(result) => {
+                    let lr = result.1;
+                    let deferred = lr.deferred.unwrap_or_default();
+                    let e: Vec<ds::Entity> = lr
+                        .found
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|er| er.entity.unwrap().into())
+                        .collect();
+                    if deferred.is_empty() {
+                        return Ok(e)
+                    } else {
+                        native_keys = deferred;
+                    }
+                }
+                Err(err) => return Err(EntailError {
+                    message: "Lookup error".into(),
+                    ds_error: Some(err),
+                }),
+            }
         }
     }
 }
