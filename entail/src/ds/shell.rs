@@ -1,6 +1,6 @@
 use super::super::*;
 
-use google_datastore1::api::{LookupRequest, ReadOptions};
+use google_datastore1::api::{LookupRequest, ReadOptions, RunQueryRequest};
 use google_datastore1::yup_oauth2::{
     ApplicationDefaultCredentialsAuthenticator, ApplicationDefaultCredentialsFlowOpts,
     authenticator::ApplicationDefaultCredentialsTypes,
@@ -107,8 +107,8 @@ impl DatastoreShell {
         loop {
             let lookup = LookupRequest {
                 database_id: self.database_id.clone(),
-                keys: Some(native_keys),
                 read_options: Some(self.build_read_options()),
+                keys: Some(native_keys),
                 ..Default::default()
             };
             let response = self
@@ -128,16 +128,43 @@ impl DatastoreShell {
                         .map(|er| er.entity.unwrap().into())
                         .collect();
                     if deferred.is_empty() {
-                        return Ok(e)
+                        return Ok(e);
                     } else {
                         native_keys = deferred;
                     }
                 }
-                Err(err) => return Err(EntailError {
-                    message: "Lookup error".into(),
-                    ds_error: Some(err),
-                }),
+                Err(err) => {
+                    return Err(EntailError {
+                        message: "Lookup error".into(),
+                        ds_error: Some(err),
+                    });
+                }
             }
+        }
+    }
+
+    pub async fn run_query(
+        &self,
+        query: ds::Query,
+    ) -> Result<ds::QueryResult<ds::Entity>, EntailError> {
+        let request = RunQueryRequest {
+            database_id: self.database_id.clone(),
+            read_options: Some(self.build_read_options()),
+            query: Some(query.into()),
+            ..Default::default()
+        };
+        let response = self
+            .hub
+            .projects()
+            .run_query(request, &self.project_id)
+            .doit()
+            .await;
+        match response {
+            Ok(result) => Ok(result.1.batch.unwrap_or_default().into()),
+            Err(err) => Err(EntailError {
+                message: "Lookup error".into(),
+                ds_error: Some(err),
+            }),
         }
     }
 }
