@@ -1,8 +1,9 @@
-use crate::ds::MutationBatch;
-
 use super::super::*;
 
-use google_datastore1::api::{CommitRequest, LookupRequest, ReadOptions, RunQueryRequest};
+use google_datastore1::api::{
+    BeginTransactionRequest, CommitRequest, LookupRequest, ReadOptions, ReadWrite, RunQueryRequest,
+    TransactionOptions,
+};
 use google_datastore1::yup_oauth2::{
     ApplicationDefaultCredentialsAuthenticator, ApplicationDefaultCredentialsFlowOpts,
     authenticator::ApplicationDefaultCredentialsTypes,
@@ -197,6 +198,35 @@ impl DatastoreShell {
             Ok(result) => Ok(result.1.into()),
             Err(err) => Err(EntailError {
                 message: "Commit error".into(),
+                ds_error: Some(err),
+            }),
+        }
+    }
+
+    pub async fn begin_transaction(&self, previous: Option<Vec<u8>>) -> Result<Self, EntailError> {
+        let request = BeginTransactionRequest {
+            database_id: self.database_id.clone(),
+            transaction_options: Some(TransactionOptions {
+                read_write: Some(ReadWrite {
+                    previous_transaction: previous,
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let response = self
+            .hub
+            .projects()
+            .begin_transaction(request, &self.project_id)
+            .doit()
+            .await;
+        match response {
+            Ok(result) => Ok(Self {
+                transaction: result.1.transaction,
+                ..self.clone()
+            }),
+            Err(err) => Err(EntailError {
+                message: "BeginTransaction error".into(),
                 ds_error: Some(err),
             }),
         }
