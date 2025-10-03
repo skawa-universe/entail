@@ -1,6 +1,8 @@
+use crate::ds::MutationBatch;
+
 use super::super::*;
 
-use google_datastore1::api::{LookupRequest, ReadOptions, RunQueryRequest};
+use google_datastore1::api::{CommitRequest, LookupRequest, ReadOptions, RunQueryRequest};
 use google_datastore1::yup_oauth2::{
     ApplicationDefaultCredentialsAuthenticator, ApplicationDefaultCredentialsFlowOpts,
     authenticator::ApplicationDefaultCredentialsTypes,
@@ -162,7 +164,39 @@ impl DatastoreShell {
         match response {
             Ok(result) => Ok(result.1.batch.unwrap_or_default().into()),
             Err(err) => Err(EntailError {
-                message: "Lookup error".into(),
+                message: "Query error".into(),
+                ds_error: Some(err),
+            }),
+        }
+    }
+
+    pub async fn commit(
+        &self,
+        batch: ds::MutationBatch,
+    ) -> Result<ds::MutationResponse, EntailError> {
+        let request = CommitRequest {
+            database_id: self.database_id.clone(),
+            mode: Some(
+                self.transaction
+                    .as_ref()
+                    .map(|_| "TRANSACTIONAL")
+                    .unwrap_or("NON_TRANSACTIONAL")
+                    .to_string(),
+            ),
+            mutations: Some(batch.into()),
+            transaction: self.transaction.clone(),
+            ..Default::default()
+        };
+        let response = self
+            .hub
+            .projects()
+            .commit(request, &self.project_id)
+            .doit()
+            .await;
+        match response {
+            Ok(result) => Ok(result.1.into()),
+            Err(err) => Err(EntailError {
+                message: "Commit error".into(),
                 ds_error: Some(err),
             }),
         }

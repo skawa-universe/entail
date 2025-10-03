@@ -163,6 +163,21 @@ impl From<google_datastore1::api::Entity> for Entity {
     }
 }
 
+impl Into<google_datastore1::api::Entity> for Entity {
+    fn into(self) -> google_datastore1::api::Entity {
+        google_datastore1::api::Entity {
+            key: Some(self.key.into()),
+            properties: Some(self.properties.into_iter().map(|(key, value)| {
+                let indexed = value.indexed;
+                let mut val: google_datastore1::api::Value = value.value.into();
+                val.exclude_from_indexes = Some(!indexed);
+                (key.into_owned(), val)
+            }).collect()),
+            ..Default::default()
+        }
+    }
+}
+
 impl From<google_datastore1::api::Key> for Key {
     fn from(value: google_datastore1::api::Key) -> Key {
         let mut key_opt = None;
