@@ -1,8 +1,8 @@
 use super::super::*;
 
 use google_datastore1::api::{
-    BeginTransactionRequest, CommitRequest, LookupRequest, ReadOptions, ReadWrite, RunQueryRequest,
-    TransactionOptions,
+    BeginTransactionRequest, CommitRequest, LookupRequest, ReadOptions, ReadWrite, RollbackRequest,
+    RunQueryRequest, TransactionOptions,
 };
 use google_datastore1::yup_oauth2::{
     ApplicationDefaultCredentialsAuthenticator, ApplicationDefaultCredentialsFlowOpts,
@@ -13,6 +13,7 @@ use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use hyper_util::rt::TokioExecutor;
 use std::error::Error;
+use std::ops::Deref;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -21,6 +22,16 @@ pub struct DatastoreShell {
     pub hub: Arc<Datastore<HttpsConnector<HttpConnector>>>,
     pub database_id: Option<String>,
     pub transaction: Option<Vec<u8>>,
+}
+
+fn simple_error<T>(
+    s: Cow<'static, str>,
+    error: google_datastore1::Error,
+) -> Result<T, EntailError> {
+    Err(EntailError {
+        message: s,
+        ds_error: Some(error),
+    })
 }
 
 impl DatastoreShell {
@@ -69,7 +80,11 @@ impl DatastoreShell {
 
     fn build_read_options(&self) -> ReadOptions {
         ReadOptions {
-            read_consistency: Some("STRONG".into()),
+            read_consistency: if self.transaction.is_none() {
+                Some("STRONG".into())
+            } else {
+                None
+            },
             transaction: self.transaction.clone(),
             ..Default::default()
         }
@@ -90,18 +105,14 @@ impl DatastoreShell {
             .doit()
             .await;
         match response {
-            Ok(result) => {
+            Ok((_, result)) => {
                 let e: Option<ds::Entity> = result
-                    .1
                     .found
                     .and_then(|e| e.into_iter().next())
                     .and_then(|er| er.entity.map(|e| e.into()));
                 Ok(e)
             }
-            Err(err) => Err(EntailError {
-                message: "Lookup error".into(),
-                ds_error: Some(err),
-            }),
+            Err(err) => simple_error("Lookup error".into(), err),
         }
     }
 
@@ -121,8 +132,7 @@ impl DatastoreShell {
                 .doit()
                 .await;
             match response {
-                Ok(result) => {
-                    let lr = result.1;
+                Ok((_, lr)) => {
                     let deferred = lr.deferred.unwrap_or_default();
                     let e: Vec<ds::Entity> = lr
                         .found
@@ -137,10 +147,7 @@ impl DatastoreShell {
                     }
                 }
                 Err(err) => {
-                    return Err(EntailError {
-                        message: "Lookup error".into(),
-                        ds_error: Some(err),
-                    });
+                    return simple_error("Lookup error".into(), err);
                 }
             }
         }
@@ -163,11 +170,8 @@ impl DatastoreShell {
             .doit()
             .await;
         match response {
-            Ok(result) => Ok(result.1.batch.unwrap_or_default().into()),
-            Err(err) => Err(EntailError {
-                message: "Query error".into(),
-                ds_error: Some(err),
-            }),
+            Ok((_, result)) => Ok(result.batch.unwrap_or_default().into()),
+            Err(err) => simple_error("Query error".into(), err),
         }
     }
 
@@ -195,20 +199,17 @@ impl DatastoreShell {
             .doit()
             .await;
         match response {
-            Ok(result) => Ok(result.1.into()),
-            Err(err) => Err(EntailError {
-                message: "Commit error".into(),
-                ds_error: Some(err),
-            }),
+            Ok((_, result)) => Ok(result.into()),
+            Err(err) => simple_error("Commit error".into(), err),
         }
     }
 
-    pub async fn begin_transaction(&self, previous: Option<Vec<u8>>) -> Result<Self, EntailError> {
+    pub async fn begin_transaction(&self, previous: &Option<Vec<u8>>) -> Result<Self, EntailError> {
         let request = BeginTransactionRequest {
             database_id: self.database_id.clone(),
             transaction_options: Some(TransactionOptions {
                 read_write: Some(ReadWrite {
-                    previous_transaction: previous,
+                    previous_transaction: previous.clone(),
                 }),
                 ..Default::default()
             }),
@@ -221,14 +222,71 @@ impl DatastoreShell {
             .doit()
             .await;
         match response {
-            Ok(result) => Ok(Self {
-                transaction: result.1.transaction,
+            Ok((_, result)) => Ok(Self {
+                transaction: result.transaction,
                 ..self.clone()
             }),
-            Err(err) => Err(EntailError {
-                message: "BeginTransaction error".into(),
-                ds_error: Some(err),
-            }),
+            Err(err) => simple_error("BeginTransaction error".into(), err),
         }
+    }
+
+    pub async fn rollback(&self, transaction: &Option<Vec<u8>>) -> Result<(), EntailError> {
+        let request = RollbackRequest {
+            database_id: self.database_id.clone(),
+            transaction: transaction.clone().or_else(|| self.transaction.clone()),
+            ..Default::default()
+        };
+        if request.transaction.is_none() {
+            return Ok(());
+        }
+        let response = self
+            .hub
+            .projects()
+            .rollback(request, &self.project_id)
+            .doit()
+            .await;
+        match response {
+            Ok(_) => Ok(()),
+            Err(err) => simple_error("Rollback error".into(), err),
+        }
+    }
+}
+
+pub struct TransactionShell {
+    pub ds: DatastoreShell,
+    pub active: bool,
+}
+
+impl<'a> Deref for TransactionShell {
+    type Target = DatastoreShell;
+    fn deref(&self) -> &Self::Target {
+        &self.ds
+    }
+}
+
+impl TransactionShell {
+    pub async fn commit(
+        &mut self,
+        batch: ds::MutationBatch,
+    ) -> Result<ds::MutationResponse, EntailError> {
+        let result = self.ds.commit(batch).await;
+        if result.is_ok() {
+            self.active = false;
+        }
+        result
+    }
+
+    pub async fn rollback(&mut self) -> Result<(), EntailError> {
+        let result = self.ds.rollback(&None).await;
+        if result.is_ok() {
+            self.active = false;
+        }
+        result
+    }
+}
+
+impl From<DatastoreShell> for TransactionShell {
+    fn from(ds: DatastoreShell) -> Self {
+        Self {  ds, active: true }
     }
 }
