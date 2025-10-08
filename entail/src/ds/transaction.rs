@@ -7,6 +7,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
+#[derive(PartialEq)]
 pub(crate) enum RetryRule {
     Normal,  // For ABORTED
     Backoff, // For DEADLINE_EXCEEDED, UNAVAILABLE
@@ -135,11 +136,17 @@ impl<'a> Transaction<'a> {
                     };
                     match retry {
                         RetryRule::Backoff | RetryRule::Normal => {
-                            let next_delay = current_delay.checked_mul(2).unwrap_or(current_delay);
-                            let min = current_delay.as_micros() as u64;
+                            let backoff = retry == RetryRule::Backoff;
+                            let next_delay = if backoff {
+                                current_delay.checked_mul(2).unwrap_or(current_delay)
+                            } else {
+                                current_delay
+                            };
+                            let min =
+                                (current_delay.as_micros() >> if backoff { 0 } else { 1 }) as u64;
                             let max = next_delay.as_micros() as u64;
                             let val = if max > min {
-                                rng.next_u64() % (max - min)
+                                rng.next_u64() % (max - min) + min
                             } else {
                                 max
                             };
