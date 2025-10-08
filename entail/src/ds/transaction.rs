@@ -230,7 +230,10 @@ impl<'a> Transaction<'a> {
     ///
     ///             Box::pin(async move {
     ///                 // Read the entity within the transaction
-    ///                 let mut user_entity: Entity = ts.get_single(key).await?.expect("User not found");
+    ///                 let mut user_entity: Entity = ts
+    ///                     .get_single(key)
+    ///                     .await?
+    ///                     .expect("User not found");
     ///
     ///                 // Modify a property of the entity
     ///                 user_entity.set_indexed("name", name_val);
