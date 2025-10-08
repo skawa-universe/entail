@@ -287,10 +287,13 @@ impl<'a> ParsedField<'a> {
 
         let property_name = if let Some(s) = &attrs.name {
             s.clone()
-        } else if c.rename_all.is_none() || c.rename_all.as_ref().unwrap() == "camelCase" {
-            name.to_string().to_case(Case::Camel)
         } else {
-            name.to_string()
+            match c.rename_all.as_ref().map(String::as_str).unwrap_or("") {
+                "camelCase" => name.to_string().to_case(Case::Camel),
+                "PascalCase" => name.to_string().to_case(Case::Pascal),
+                "snake_case" => name.to_string().to_case(Case::Snake),
+                _ => name.to_string(),
+            }
         };
 
         Some(ParsedField { name, ty_path, attrs, property_name })
@@ -420,9 +423,9 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         let name: &proc_macro2::Ident = f.name;
         let property_name_lit: syn::LitStr = f.create_property_name_lit();
         let nullable: bool = f.is_nullable();
-        let array: bool = f.is_array();
         let path: &syn::Path = f.type_path();
-
+        let array: bool = !path.is_ident("u8") && f.is_array();
+        
         let setter = if !f.attrs.unindexed && !f.attrs.unindexed_nulls || f.attrs.indexed {
             quote! { set_indexed }
         } else {
@@ -450,9 +453,10 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 }
         }
 
-        // blob is not implemented yet
-        
-        if is_string_type(path) {
+        // blob implementation is very basic, only Vec<u8>
+        if f.is_array() && path.is_ident("u8") {
+            gen_setter!(blob, (val.clone()))
+        } else if is_string_type(path) {
             gen_setter!(unicode_string, (val.clone()))
         } else if is_cow_static_str_type(path) {
             gen_setter!(unicode_string, val)
@@ -501,8 +505,8 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
             let name: &Ident = f.name;
             let property_name_lit: syn::LitStr = f.create_property_name_lit();
             let nullable: bool = f.is_nullable();
-            let array: bool = f.is_array();
             let path: &syn::Path = f.type_path();
+            let array: bool = !path.is_ident("u8") && f.is_array();
             let model_name = &raw_name;
 
             macro_rules! gen_initializer {
@@ -547,7 +551,9 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
             }
             let initializer = 
                 // blob is not implemented yet
-                if is_string_type(path) {
+                if f.is_array() && path.is_ident("u8") {
+                    gen_initializer!(Blob, (val.clone()))
+                } else if is_string_type(path) {
                     gen_initializer!(UnicodeString, (String::from(val.as_ref())))
                 } else if is_cow_static_str_type(path) {
                     gen_initializer!(UnicodeString, val)
@@ -560,7 +566,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 } else if is_key_type(path) {
                     gen_initializer!(Key, (val.clone()))
                 } else {
-                    panic!("Unexpected type: {:?}", path);
+                    panic!("Unexpected type: {:?} {:?}", path, f.is_array());
                 };
 
             Some(quote! { #name: #initializer, })

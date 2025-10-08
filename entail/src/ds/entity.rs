@@ -224,7 +224,7 @@ pub enum Value {
     Null,
     Integer(i64),
     Boolean(bool),
-    Blob(Cow<'static, [u8]>),
+    Blob(Vec<u8>),
     UnicodeString(Cow<'static, str>),
     FloatingPoint(f64),
     Array(Vec<Value>),
@@ -244,7 +244,7 @@ impl Value {
         Value::Boolean(val)
     }
 
-    pub fn blob(val: impl Into<Cow<'static, [u8]>>) -> Value {
+    pub fn blob(val: impl Into<Vec<u8>>) -> Value {
         Value::Blob(val.into())
     }
 
@@ -284,6 +284,13 @@ impl Value {
             _ => None,
         }
     }
+
+    pub fn is_null(&self) -> bool {
+        match self {
+            Self::Null => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<google_datastore1::api::Value> for Value {
@@ -293,7 +300,7 @@ impl From<google_datastore1::api::Value> for Value {
         } else if let Some(boolean_value) = value.boolean_value {
             Value::Boolean(boolean_value)
         } else if let Some(blob_value) = value.blob_value {
-            Value::Blob(Cow::Owned(blob_value))
+            Value::Blob(blob_value.clone())
         } else if let Some(string_value) = value.string_value {
             Value::UnicodeString(Cow::Owned(string_value))
         } else if let Some(double_value) = value.double_value {
@@ -336,8 +343,8 @@ impl Into<google_datastore1::api::Value> for Value {
                 ds_value.boolean_value = Some(b);
             }
             Value::Blob(b) => {
-                // Convert Cow<'static, [u8]> to Vec<u8>
-                ds_value.blob_value = Some(b.into_owned());
+                // Clone Vec<u8>
+                ds_value.blob_value = Some(b.clone());
             }
             Value::UnicodeString(s) => {
                 // Convert Cow<'static, str> to String
@@ -448,6 +455,11 @@ impl Entity {
 
     pub fn set_indexed(&mut self, name: impl Into<Cow<'static, str>>, value: Value) -> &mut Self {
         self.set(name, value, true)
+    }
+
+    pub fn set_indexed_if_not_null(&mut self, name: impl Into<Cow<'static, str>>, value: Value) -> &mut Self {
+        let is_null = value.is_null();
+        self.set(name, value, !is_null)
     }
 
     pub fn is_indexed(&self, name: &str) -> bool {

@@ -11,6 +11,8 @@ struct Model {
     key: Option<i32>,
     #[entail]
     lookup: Vec<String>,
+    #[entail(unindexed)]
+    bin: Vec<u8>,
     #[entail]
     related: Option<ds::Key>,
 }
@@ -26,6 +28,7 @@ fn code_gen() {
             String::from("such"),
             String::from("index"),
         ],
+        bin: vec![1, 2, 3],
         related: None,
     };
     let mut e = model.to_ds_entity().unwrap();
@@ -47,6 +50,10 @@ fn code_gen() {
             ds::Value::unicode_string("index"),
         ]))
         .as_ref()
+    );
+    assert_eq!(
+        e.get("bin"),
+        Some(ds::Value::Blob(vec![1, 2, 3].into())).as_ref()
     );
     assert_eq!(e.get("related"), Some(ds::Value::null()).as_ref());
     let related_key = ds::Key::new("Bizz").with_name("buzz");

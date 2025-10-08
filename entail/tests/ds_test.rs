@@ -66,7 +66,7 @@ pub async fn create_conflict() -> Result<(), EntailError> {
         })
     });
     let (a, b) = tokio::join!(ta, t2);
-    println!("a: {:?}", a?);
-    println!("b: {:?}", b?);
+    println!("a tries: {}", a.unwrap());
+    println!("b tries: {}", b.unwrap());
     Ok(())
 }
