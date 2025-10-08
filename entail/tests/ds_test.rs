@@ -14,6 +14,19 @@ pub async fn test_create_conflict() {
     }
 }
 
+async fn update_glank(ds: &DatastoreShell, key_name: &str, s: &str) -> Result<(), EntailError> {
+    Transaction::new(ds).run(|ts| {
+        let key = Key::new("Foo").with_name(key_name.to_string());
+        let val = Value::unicode_string(s.to_string());
+        Box::pin(async move {
+            let mut e: Entity = ts.get_single(key).await?.expect("Entity not found");
+            e.set_indexed("glank", val);
+            ts.commit(MutationBatch::new().update(e)).await?;
+            Ok(())
+        })
+    }).await
+}
+
 pub async fn create_conflict() -> Result<(), EntailError> {
     rustls::crypto::ring::default_provider()
         .install_default()

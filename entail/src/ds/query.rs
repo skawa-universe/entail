@@ -36,13 +36,41 @@ impl From<google_datastore1::api::QueryResultBatch> for QueryResult<Entity> {
     }
 }
 
+/// Represents a filter used in a Datastore query.
+///
+/// Filters are used to constrain the results returned by a query,
+/// much like a `WHERE` clause in SQL.
 #[derive(Clone, Debug)]
 pub enum Filter {
+    /// A composite filter that combines multiple sub-filters using a logical operator.
+    ///
+    /// Currently, only the `And` operator is supported.
     Composite(CompositeFilterOperator, Vec<Filter>),
+    /// Represents a filter based on a property's value.
+    ///
+    /// This is the most common type of filter, used for comparisons like `property > value`.
+    /// It consists of three components:
+    /// 1.  **Property Name**: The name of the property to filter on. While this is typically
+    ///     a static string, it is represented as a `Cow<'static, str>` to allow for
+    ///     both borrowed and owned strings.
+    /// 2.  **Operator**: The [`FilterOperator`] to use for the comparison (e.g., `Equal`, `GreaterThan`).
+    /// 3.  **Value**: The `Value` to compare the property against.
     Property(Cow<'static, str>, FilterOperator, Value),
 }
 
 impl Filter {
+    /// Combines multiple filters with a logical `AND` operator.
+    ///
+    /// This is a convenience method for creating a `Composite` filter. It handles
+    /// edge cases by returning `None` for an empty vector or unwrapping a single
+    /// filter from a vector of one.
+    ///
+    /// ## Parameters
+    /// - `filters`: A `Vec` of `Filter`s to be combined.
+    ///
+    /// ## Returns
+    /// An `Option<Filter>` containing the combined filter, or `None` if the input vector
+    /// was empty.
     pub fn and(filters: Vec<Filter>) -> Option<Filter> {
         if filters.is_empty() {
             None
@@ -54,12 +82,16 @@ impl Filter {
     }
 }
 
+/// The logical operator used to combine sub-filters in a `Composite` filter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display, EnumString)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum CompositeFilterOperator {
+    /// The logical `AND` operator. All sub-filters must evaluate to true for the composite
+    /// filter to be true.
     And,
 }
 
+/// The comparison operator used in a `Property` filter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display, EnumString)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum FilterOperator {
@@ -99,22 +131,36 @@ impl Into<google_datastore1::api::Filter> for Filter {
     }
 }
 
+/// The direction in which to order query results.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display, EnumString)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum OrderDirection {
+    /// Ascending order (A-Z, 0-9). This is the default.
     ASCENDING,
+    /// Descending order (Z-A, 9-0).
     DESCENDING,
 }
 
+/// A single property by which to order the results of a query.
+///
+/// An `PropertyOrder` consists of a property's name and the desired sort direction.
+/// Multiple `PropertyOrder`s can be used to define a multi-level sort.
 #[derive(Clone, Debug)]
 pub struct PropertyOrder {
+    /// The name of the property to order by.
     pub name: Cow<'static, str>,
+    /// The direction of the sort, either `ASCENDING` or `DESCENDING`.
     pub direction: OrderDirection,
 }
 
 impl PropertyOrder {
-    pub fn new(name: Cow<'static, str>, direction: OrderDirection) -> Self {
-        Self { name, direction }
+    /// Creates a new `PropertyOrder` instance.
+    ///
+    /// ## Parameters
+    /// - `name`: The name of the property to order by.
+    /// - `direction`: The direction of the sort.
+    pub fn new(name: impl Into<Cow<'static, str>>, direction: OrderDirection) -> Self {
+        Self { name: name.into(), direction }
     }
 }
 
@@ -128,24 +174,62 @@ impl Into<google_datastore1::api::PropertyOrder> for PropertyOrder {
     }
 }
 
+/// Represents a query to be executed against the Datastore.
+///
+/// A `Query` object defines the criteria for retrieving entities, including the
+/// kind of entity, filters, sorting, and pagination options.
 #[derive(Clone, Debug)]
 pub struct Query {
-    /// The kind on which the query is going to be performed.
-    /// Use an empty string for kindless queries.
-    /// The API supports 1 kind at most.
+    /// The **kind** of entity to query.
+    ///
+    /// Use an empty string to perform a kindless query, which can return entities
+    /// of any kind. The Datastore API supports querying at most one kind at a time.
     pub kind: Cow<'static, str>,
-    /// The filter to use on the entities
+    /// An optional **filter** to apply to the entities.
+    ///
+    /// This allows you to restrict the query results based on property values,
+    /// similar to a `WHERE` clause in SQL.
     pub filter: Option<Filter>,
-    /// The cursor at which the query should begin.
+    /// An optional **start cursor** for pagination.
+    ///
+    /// If provided, the query will begin returning results from this cursor's position,
+    /// which is useful for fetching the next page of a large result set.
     pub start_cursor: Option<Vec<u8>>,
-    /// The cursor at which the query should stop.
+    /// An optional **end cursor** for pagination.
+    ///
+    /// The query will stop returning results at this cursor's position. This can be
+    /// used to limit the results to a specific range.
     pub end_cursor: Option<Vec<u8>>,
-    /// Property names to project on
+    /// A list of property names to **project** on.
+    ///
+    /// This is a **projection query**, which returns only the specified properties,
+    /// rather than the entire entity. This can reduce latency and cost.
+    ///
+    /// **Important:** Projection queries only work for properties that are
+    /// included in an index. The special `__key__` property is always projectable.
     pub projection: Vec<Cow<'static, str>>,
-    /// Properties to return distinct results on
+    /// A list of property names to return **distinct** results on.
+    ///
+    /// This ensures that only entities with unique combinations of values for the
+    /// specified properties are returned.
+    ///
+    /// **Important:** Like projections, `distinct_on` requires the specified
+    /// properties to be part of a proper index.
     pub distinct_on: Vec<Cow<'static, str>>,
+    /// A list of **property orders** to sort the results by.
+    ///
+    /// The results will be ordered according to the specified properties and their
+    /// sort directions (ascending or descending).
     pub order: Vec<PropertyOrder>,
+    /// The maximum number of results to return.
+    ///
+    /// A value of `0` means no limit. You never-ever want to run an unlimited query.
     pub limit: i32,
+    /// The number of results to skip from the beginning of the result set.
+    ///
+    /// **Caveat**: While supported, using an offset can be inefficient and costly. The skipped
+    /// entities are still read internally by Datastore, affecting query latency and
+    /// billing. It is highly recommended to use `start_cursor` for pagination instead.
     pub offset: i32,
 }
 
