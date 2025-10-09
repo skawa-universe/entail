@@ -118,7 +118,7 @@ impl Key {
         if let Some(parent) = &self.parent {
             parent.push_path_elements(out);
         }
-        
+
         let kind = self.kind.into_owned();
         out.push(match self.variant {
             KeyVariant::Id(id) => google_datastore1::api::PathElement {
@@ -167,12 +167,17 @@ impl Into<google_datastore1::api::Entity> for Entity {
     fn into(self) -> google_datastore1::api::Entity {
         google_datastore1::api::Entity {
             key: Some(self.key.into()),
-            properties: Some(self.properties.into_iter().map(|(key, value)| {
-                let indexed = value.indexed;
-                let mut val: google_datastore1::api::Value = value.value.into();
-                val.exclude_from_indexes = Some(!indexed);
-                (key.into_owned(), val)
-            }).collect()),
+            properties: Some(
+                self.properties
+                    .into_iter()
+                    .map(|(key, value)| {
+                        let indexed = value.indexed;
+                        let mut val: google_datastore1::api::Value = value.value.into();
+                        val.exclude_from_indexes = Some(!indexed);
+                        (key.into_owned(), val)
+                    })
+                    .collect(),
+            ),
             ..Default::default()
         }
     }
@@ -315,7 +320,10 @@ impl From<google_datastore1::api::Value> for Value {
             Value::Array(values)
         } else if let Some(key_value) = value.key_value {
             Value::Key(key_value.into())
-        } else if value.entity_value.is_some() || value.geo_point_value.is_some() || value.timestamp_value.is_some() {
+        } else if value.entity_value.is_some()
+            || value.geo_point_value.is_some()
+            || value.timestamp_value.is_some()
+        {
             // Panic for unsupported types like `entityValue`, `geoPointValue`,
             // `timestampValue`, and others.
             panic!("Unsupported Datastore value type");
@@ -329,7 +337,7 @@ impl From<google_datastore1::api::Value> for Value {
 
 impl Into<google_datastore1::api::Value> for Value {
     fn into(self) -> google_datastore1::api::Value {
-        let mut ds_value = google_datastore1::api::Value::default(); 
+        let mut ds_value = google_datastore1::api::Value::default();
 
         match self {
             Value::Null => {
@@ -392,9 +400,19 @@ impl fmt::Display for Value {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-struct PropertyValue {
+pub struct PropertyValue {
     value: Value,
     indexed: bool,
+}
+
+impl PropertyValue {
+    pub fn value(&self) -> &Value {
+        &self.value
+    }
+
+    pub fn is_indexed(&self) -> bool {
+        self.indexed
+    }
 }
 
 impl fmt::Display for PropertyValue {
@@ -433,6 +451,14 @@ impl Entity {
         &self.key
     }
 
+    pub fn property_iter_raw(&self) -> impl Iterator<Item = (&Cow<'static, str>, &PropertyValue)> {
+        self.properties.iter()
+    }
+
+    pub fn property_iter(&self) -> impl Iterator<Item = (&Cow<'static, str>, &Value)> {
+        self.properties.iter().map(|(key, value)| (key, value.value()))
+    }
+
     pub fn set_key(&mut self, key: Key) -> &mut Self {
         self.key = key;
         self
@@ -457,7 +483,11 @@ impl Entity {
         self.set(name, value, true)
     }
 
-    pub fn set_indexed_if_not_null(&mut self, name: impl Into<Cow<'static, str>>, value: Value) -> &mut Self {
+    pub fn set_indexed_if_not_null(
+        &mut self,
+        name: impl Into<Cow<'static, str>>,
+        value: Value,
+    ) -> &mut Self {
         let is_null = value.is_null();
         self.set(name, value, !is_null)
     }
