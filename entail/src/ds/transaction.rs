@@ -196,11 +196,13 @@ impl<'a> Transaction<'a> {
 
     /// Runs the provided asynchronous code block within a Datastore transaction.
     ///
-    /// This is the primary method for executing transactional logic. It will
-    /// automatically begin a transaction, execute the code in the provided closure,
-    /// and either commit or roll back the result. If a concurrency conflict or
-    /// other retryable error occurs, it will handle the full retry logic (including
-    /// exponential backoff and jitter) up to the configured `retry_count`.
+    /// This is the primary method for executing transactional logic. It will automatically
+    /// begin a transaction and execute the code in the provided closure. The closure is
+    /// responsible for either committing or rolling back the transaction. If it does
+    /// neither, the transaction will be automatically rolled back upon completion of the
+    /// closure. If a concurrency conflict or other retryable error occurs, it will handle
+    /// the full retry logic (including exponential backoff and jitter as recommended) up
+    /// to the configured `retry_count`.
     ///
     /// The `body` closure is given a mutable reference to a [`TransactionShell`],
     /// which provides the transactional context for Datastore operations. The runner
