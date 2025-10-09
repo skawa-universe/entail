@@ -31,7 +31,7 @@ jobs:
         uses: actions/configure-pages@v5  # Configures GitHub Pages environment
 
       - name: Build docs
-        run: cargo doc --no-deps --lib  # Builds library docs only; add --workspace if needed
+        run: cd entail; cargo doc --no-deps --lib  # Builds library docs only; add --workspace if needed
         env:
           RUSTDOCFLAGS: "-D warnings"  # Treat warnings as errors (optional)
 
