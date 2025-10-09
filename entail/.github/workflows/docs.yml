@@ -1,0 +1,58 @@
+name: Deploy Rust Docs to GitHub Pages
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:  # Allows manual triggers
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false  # Don't cancel ongoing deploys
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable  # Installs latest stable Rust
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5  # Configures GitHub Pages environment
+
+      - name: Build docs
+        run: cargo doc --no-deps --lib  # Builds library docs only; add --workspace if needed
+        env:
+          RUSTDOCFLAGS: "-D warnings"  # Treat warnings as errors (optional)
+
+      - name: Create index redirect
+        run: |
+          # Rustdoc doesn't create a root index.html, so add a minimal redirect to your crate's docs
+          CRATE_NAME=$(basename "$GITHUB_REPOSITORY")
+          echo '<meta http-equiv=refresh content="0;url='${CRATE_NAME}/">' > target/doc/index.html
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./target/doc  # Path to the generated docs
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
