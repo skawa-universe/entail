@@ -39,7 +39,7 @@ jobs:
         run: |
           # Rustdoc doesn't create a root index.html, so add a minimal redirect to your crate's docs
           CRATE_NAME=$(basename "$GITHUB_REPOSITORY")
-          echo '<meta http-equiv=refresh content="0;url='${CRATE_NAME}/">' > target/doc/index.html
+          echo '<meta http-equiv=refresh content="0;url='"${CRATE_NAME}"'/">' > target/doc/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
