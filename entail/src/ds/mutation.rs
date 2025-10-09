@@ -4,6 +4,7 @@ use super::*;
 ///
 /// Mutations are grouped into a [`MutationBatch`] and committed to the Datastore
 /// using [`DatastoreShell::commit`].
+#[derive(Debug)]
 pub enum Mutation {
     /// Inserts a new entity into the Datastore.
     ///
@@ -50,6 +51,7 @@ impl Into<google_datastore1::api::Mutation> for Mutation {
 }
 
 /// The response for [`DatastoreShell::commit`]
+#[derive(Debug)]
 pub struct MutationResponse {
     /// The result of performing the mutations. The i-th mutation result corresponds
     /// to the i-th mutation in the request.
@@ -76,6 +78,7 @@ impl From<google_datastore1::api::CommitResponse> for MutationResponse {
 }
 
 /// The result of applying a mutation.
+#[derive(Debug)]
 pub struct MutationResult {
     /// The automatically allocated key. Set only when the mutation allocated a key.
     pub key: Option<Key>,
@@ -106,6 +109,7 @@ impl From<google_datastore1::api::MutationResult> for MutationResult {
     }
 }
 
+#[derive(Debug)]
 pub struct MutationBatch {
     pub mutations: Vec<google_datastore1::api::Mutation>,
 }

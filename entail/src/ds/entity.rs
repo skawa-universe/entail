@@ -391,7 +391,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 struct PropertyValue {
     value: Value,
     indexed: bool,
@@ -408,7 +408,7 @@ impl fmt::Display for PropertyValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Entity {
     key: Key,
     properties: HashMap<Cow<'static, str>, PropertyValue>,

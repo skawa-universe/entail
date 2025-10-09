@@ -7,6 +7,7 @@ use strum::{Display, EnumString};
 ///
 /// This struct holds a collection of items (T) retrieved in the current request
 /// and a cursor used to fetch the subsequent page of items.
+#[derive(Debug)]
 pub struct QueryResult<T> {
     /// The collection of data items returned for this page.
     pub items: Vec<T>,
