@@ -5,7 +5,10 @@ use super::*;
 
 use std::future::Future;
 use std::ops::Deref;
-use std::pin::Pin;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
 
 /// A wrapper around a transactional [`DatastoreShell`] instance.
@@ -14,7 +17,7 @@ use std::time::Duration;
 /// and is tied to a single, ongoing Datastore transaction. It automatically tracks
 /// whether the transaction has been successfully committed or rolled back via the
 /// internal `active` flag.
-/// 
+///
 /// **Usage Note**: `TransactionShell` automatically **dereferences** to [`DatastoreShell`],
 /// which means you can use the standard DatastoreShell methods (like `get_single` and
 /// `run_query`) directly on a `TransactionShell` instance. The only exceptions are
@@ -23,7 +26,7 @@ use std::time::Duration;
 /// transaction and does not require an optional transaction parameter.
 pub struct TransactionShell {
     ds: DatastoreShell,
-    active: bool,
+    active: AtomicBool,
 }
 
 impl<'a> Deref for TransactionShell {
@@ -48,12 +51,12 @@ impl TransactionShell {
     /// ## Returns
     /// A [`Result`] containing the commit response or an error.
     pub async fn commit(
-        &mut self,
+        &self,
         batch: ds::MutationBatch,
     ) -> Result<ds::MutationResponse, EntailError> {
         let result = self.ds.commit(batch).await;
         if result.is_ok() {
-            self.active = false;
+            self.active.store(false, Ordering::SeqCst);
         }
         result
     }
@@ -66,12 +69,20 @@ impl TransactionShell {
     ///
     /// ## Returns
     /// A [`Result`] indicating success (`()`) or an error.
-    pub async fn rollback(&mut self) -> Result<(), EntailError> {
+    pub async fn rollback(&self) -> Result<(), EntailError> {
         let result = self.ds.rollback(&None).await;
         if result.is_ok() {
-            self.active = false;
+            self.make_inactive();
         }
         result
+    }
+
+    fn make_inactive(&self) {
+        self.active.store(false, Ordering::SeqCst);
+    }
+
+    fn is_active(&self) -> bool {
+        self.active.load(Ordering::SeqCst)
     }
 }
 
@@ -83,7 +94,10 @@ impl From<DatastoreShell> for TransactionShell {
     /// if the shell is tied to a transaction.
     fn from(ds: DatastoreShell) -> Self {
         let has_txn = ds.transaction.is_some();
-        Self { ds, active: has_txn }
+        Self {
+            ds,
+            active: AtomicBool::new(has_txn),
+        }
     }
 }
 
@@ -215,9 +229,8 @@ impl<'a> Transaction<'a> {
     ///
     /// ```
     /// use entail::{
-    ///     ds::{DatastoreShell, Entity, Key, MutationBatch, Value},
+    ///     ds::{DatastoreShell, Entity, Key, MutationBatch, Value, Transaction},
     ///     EntailError,
-    ///     Transaction,
     /// };
     ///
     /// async fn update_user_name(
@@ -227,10 +240,17 @@ impl<'a> Transaction<'a> {
     /// ) -> Result<(), EntailError> {
     ///     Transaction::new(ds)
     ///         .run(|ts| {
+    ///             // This outer, synchronous block is used to prepare data for the
+    ///             // asynchronous operation. We create owned values here because we
+    ///             // cannot move borrowed references (`&i64`, `&str`) into the
+    ///             // `async move` block below.
     ///             let key = Key::new("User").with_id(user_id);
     ///             let name_val = Value::unicode_string(new_name.to_string());
     ///
-    ///             Box::pin(async move {
+    ///             // The inner `async move` block is the actual asynchronous code
+    ///             // that will be run. The `move` keyword transfers ownership of
+    ///             // all captured variables (`key` and `name_val`) into this future.
+    ///             async move {
     ///                 // Read the entity within the transaction
     ///                 let mut user_entity: Entity = ts
     ///                     .get_single(key)
@@ -243,7 +263,7 @@ impl<'a> Transaction<'a> {
     ///                 // Commit the changes as an atomic update
     ///                 ts.commit(MutationBatch::new().update(user_entity)).await?;
     ///                 Ok(())
-    ///             })
+    ///             }
     ///         })
     ///         .await
     /// }
@@ -255,12 +275,10 @@ impl<'a> Transaction<'a> {
     /// ## Returns
     /// The final result of the transaction body, or an [`EntailError`] if all
     /// retries fail.
-    pub async fn run<T, F>(self, mut body: F) -> Result<T, EntailError>
+    pub async fn run<T, F, Fut>(self, mut body: F) -> Result<T, EntailError>
     where
-        F: for<'b> FnMut(
-            &'b mut TransactionShell,
-        )
-            -> Pin<Box<dyn Future<Output = Result<T, EntailError>> + Send + 'b>>,
+        F: FnMut(Arc<TransactionShell>) -> Fut,
+        Fut: Future<Output = Result<T, EntailError>> + Send,
         T: Send,
     {
         let mut retries_left = self.retry_count;
@@ -276,18 +294,20 @@ impl<'a> Transaction<'a> {
                 });
             }
             retries_left -= 1;
-            let mut this_txn = TransactionShell::from(self.ds.begin_transaction(&last_txn).await?);
+            let this_txn = Arc::new(TransactionShell::from(
+                self.ds.begin_transaction(&last_txn).await?,
+            ));
             last_txn = this_txn.ds.transaction.clone();
-            let result = body(&mut this_txn).await;
+            let result = body(this_txn.clone()).await;
             match result {
                 Ok(result) => {
-                    if this_txn.active {
+                    if this_txn.is_active() {
                         this_txn.rollback().await?;
                     }
                     return Ok(result);
                 }
                 Err(err) => {
-                    if this_txn.active {
+                    if this_txn.is_active() {
                         if this_txn.rollback().await.is_err() {
                             return Err(EntailError {
                                 message: "Autorollback error".into(),

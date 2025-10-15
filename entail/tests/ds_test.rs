@@ -33,7 +33,7 @@ pub async fn create_conflict() -> Result<(), EntailError> {
     let ta = Transaction::new(&ds).run(|ts| {
         tries_a += 1;
         let key1 = key.clone();
-        Box::pin(async move {
+        async move {
             eprintln!("a1..");
             _ = ts.get_single(key1.clone()).await?;
             eprintln!("a2..");
@@ -45,13 +45,13 @@ pub async fn create_conflict() -> Result<(), EntailError> {
             .await?;
             eprintln!("a3..");
             Ok(tries_a)
-        })
+        }
     });
     let mut tries_b = 0;
     let t2 = Transaction::new(&ds).run(|ts| {
         tries_b += 1;
         let key2 = key.clone();
-        Box::pin(async move {
+        async move {
             eprintln!("b1..");
             _ = ts.get_single(key2.clone()).await?;
             eprintln!("b2..");
@@ -63,7 +63,7 @@ pub async fn create_conflict() -> Result<(), EntailError> {
             .await?;
             eprintln!("b3..");
             Ok(tries_b)
-        })
+        }
     });
     let (a, b) = tokio::join!(ta, t2);
     println!("a tries: {}", a.unwrap());
