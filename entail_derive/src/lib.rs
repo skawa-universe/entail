@@ -402,12 +402,12 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
             quote! {
                 match &self.#key_field_name {
                     None => entail::ds::Key::new(#kind_str),
-                    Some(key) => key,
+                    Some(key) => key.clone(),
                 }
             }
         } else {
             quote! {
-                self.#key_field_name
+                self.#key_field_name.clone()
             }
         }
     } else {

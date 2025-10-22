@@ -17,6 +17,13 @@ struct Model {
     related: Option<ds::Key>,
 }
 
+#[derive(Entail, Debug)]
+#[entail(rename_all = "camelCase")]
+struct MinimalModel {
+    #[entail]
+    key: ds::Key,
+}
+
 #[test]
 fn code_gen() {
     let model = Model {
@@ -65,4 +72,13 @@ fn code_gen() {
     assert_eq!(new_model.lookup, model.lookup);
     assert_eq!(new_model.related.as_ref(), Some(&related_key));
     println!("{:?}", new_model);
+}
+
+#[test]
+fn code_gen_minimal_model() {
+    let min_mod = MinimalModel {
+        key: ds::Key::new("MinimalModel").with_name("wibz")
+    };
+    let e = min_mod.to_ds_entity().unwrap();
+    assert_eq!(&ds::Key::new("MinimalModel").with_name("wibz"), e.key());
 }
