@@ -98,13 +98,45 @@ pub use entail_derive::Entail;
 
 use std::{borrow::Cow, fmt};
 
+/// A trait automatically implemented for structs that derive `#[derive(Entail)]`.
+///
+/// This trait provides the core functionality for converting between a Rust struct
+/// and a Cloud Datastore entity representation, enabling seamless persistence.
 pub trait EntityModel: Sized {
+    /// Converts the Rust struct instance into an `entail::Entity` (aliased as `ds::Entity`).
+    ///
+    /// This method maps the struct's fields to Datastore properties, applying any
+    /// field-level configurations like renaming or indexing.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing the Datastore [`ds::Entity`] or an [`EntailError`]
+    /// if the conversion fails (e.g., due to an incompatible type).
     fn to_ds_entity(&self) -> Result<ds::Entity, EntailError>;
+
+    /// Converts a Datastore entity reference back into an instance of the Rust struct.
+    ///
+    /// This method is responsible for validating and extracting properties from the
+    /// entity and mapping them back to the struct's fields.
+    ///
+    /// ## Parameters
+    /// - `e`: A reference to the Datastore entity.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing the populated struct instance or an [`EntailError`]
+    /// if the conversion fails (e.g., a required field is missing or a type mismatch occurs).
     fn from_ds_entity(e: &ds::Entity) -> Result<Self, EntailError>;
 }
 
+/// The primary error type used throughout the `entail` crate for operations that can fail.
+///
+/// This error encapsulates both logic errors within the library (such as data
+/// validation failures during mapping) and underlying Cloud Datastore API errors.
 #[derive(Debug, Default)]
 pub struct EntailError {
+    /// A human-readable message describing the nature of the error on the Entail level.
     pub message: std::borrow::Cow<'static, str>,
+    /// An optional underlying error returned directly by the `google-datastore1`
+    /// client library, providing detailed context for API failures (e.g., networking,
+    /// authorization, or transactional conflicts).
     pub ds_error: Option<google_datastore1::Error>,
 }
