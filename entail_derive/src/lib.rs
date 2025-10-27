@@ -216,6 +216,10 @@ fn is_integer_type(path: &syn::Path) -> bool {
     path.is_ident("i32") || path.is_ident("u32") || path.is_ident("i64")
 }
 
+fn has_attribute(field: &Field, name: &str) -> bool {
+    field.attrs.iter().any(|attr| attr.path().is_ident(name))
+}
+
 // Represents the parsed #[entail(...)] attribute for a field
 #[derive(Debug, Default, FromField)]
 #[darling(attributes(entail))]
@@ -277,6 +281,9 @@ impl<'a> ParsedField<'a> {
             return None;
         };
 
+        if !has_attribute(f, "entail") {
+            return None;
+        }
         let attrs = match EntailFieldAttribute::from_field(f) {
             Ok(attrs) => attrs,
             Err(e) => {
@@ -353,6 +360,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
 
     let all_fields: Vec<ParsedFieldPair> = fields.iter()
         .map(|field| ParsedFieldPair { field, parsed_field: ParsedField::build(&field, &entail_input) })
+        .filter(|fp| { fp.parsed_field.is_some() })
         .collect();
     let parsed_fields: Vec<&ParsedField> = all_fields.iter()
         .filter_map(|f| { f.parsed_field.as_ref() })
@@ -584,6 +592,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 Ok(Self {
                     #key_initializer,
                     #(#initializers)*
+                    ..Self::default()
                 })
             }
 

@@ -1,6 +1,7 @@
+use std::collections::HashSet;
 use entail::{Entail, EntityModel, ds};
 
-#[derive(Entail, Debug)]
+#[derive(Entail, Debug, Default)]
 #[entail(rename_all = "camelCase")]
 struct Model {
     #[entail(key)]
@@ -15,6 +16,7 @@ struct Model {
     bin: Vec<u8>,
     #[entail]
     related: Option<ds::Key>,
+    unrelated: Option<HashSet<String>>,
 }
 
 #[derive(Entail, Debug)]
@@ -22,6 +24,12 @@ struct Model {
 struct MinimalModel {
     #[entail]
     key: ds::Key,
+}
+
+impl Default for MinimalModel {
+    fn default() -> Self {
+        Self { key: ds::Key::new("MinimalModel").with_name("juff") }
+    }
 }
 
 #[test]
@@ -36,7 +44,8 @@ fn code_gen() {
             String::from("index"),
         ],
         bin: vec![1, 2, 3],
-        related: None,
+        unrelated: Some(HashSet::new()),
+        ..Model::default()
     };
     let mut e = model.to_ds_entity().unwrap();
     println!("{}", e);
@@ -71,6 +80,7 @@ fn code_gen() {
     assert_eq!(new_model.key, model.key);
     assert_eq!(new_model.lookup, model.lookup);
     assert_eq!(new_model.related.as_ref(), Some(&related_key));
+    assert!(new_model.unrelated.is_none());
     println!("{:?}", new_model);
 }
 
