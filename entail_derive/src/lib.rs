@@ -1,6 +1,6 @@
 use darling::{FromField, FromDeriveInput};
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, format_ident};
 use syn::{parse_macro_input, DeriveInput, GenericArgument, PathArguments, Type, Ident, Fields, Field};
 use syn::spanned::Spanned;
 use convert_case::{Case, Casing};
@@ -585,8 +585,11 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         }
     }).collect();
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+    let adapter_name = format_ident!("_{}_ADAPTER", name.to_string().to_case(Case::Constant));
     let generated = quote! {
-        impl #impl_generics entail::EntityModel for #name #type_generics #where_clause {
+        static #adapter_name: entail::EntityAdapter<#name> = entail::EntityAdapter::new(#kind_str);
+
+        impl #impl_generics entail::EntityModel<#name> for #name #type_generics #where_clause {
             fn from_ds_entity(e: &entail::ds::Entity) -> Result<Self, entail::EntailError> {
                 let null_value = entail::ds::Value::Null;
                 Ok(Self {
@@ -600,6 +603,10 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 let mut e = entail::ds::Entity::new(#entity_key_new);
                 #(#set_properties)*
                 Ok(e)
+            }
+
+            fn adapter() -> &'static entail::EntityAdapter<#name> {
+                &#adapter_name
             }
         }
     };

@@ -95,6 +95,7 @@ The `entail` library handles the conversion between common Rust types and `entai
 */
 pub mod ds;
 pub use entail_derive::Entail;
+mod adapter;
 
 use std::{borrow::Cow, fmt};
 
@@ -102,7 +103,7 @@ use std::{borrow::Cow, fmt};
 ///
 /// This trait provides the core functionality for converting between a Rust struct
 /// and a Cloud Datastore entity representation, enabling seamless persistence.
-pub trait EntityModel: Sized {
+pub trait EntityModel<T>: Sized {
     /// Converts the Rust struct instance into an `entail::Entity` (aliased as `ds::Entity`).
     ///
     /// This method maps the struct's fields to Datastore properties, applying any
@@ -125,6 +126,11 @@ pub trait EntityModel: Sized {
     /// A [`Result`] containing the populated struct instance or an [`EntailError`]
     /// if the conversion fails (e.g., a required field is missing or a type mismatch occurs).
     fn from_ds_entity(e: &ds::Entity) -> Result<Self, EntailError>;
+
+    /// Returns a static reference to the EntityAdapter for type T.
+    ///
+    /// This adapter provides utility methods (like key creation) tied to the model.
+    fn adapter() -> &'static EntityAdapter<T>;
 }
 
 /// The primary error type used throughout the `entail` crate for operations that can fail.
@@ -140,3 +146,5 @@ pub struct EntailError {
     /// authorization, or transactional conflicts).
     pub ds_error: Option<google_datastore1::Error>,
 }
+
+pub use adapter::*;

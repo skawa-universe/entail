@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use entail::{Entail, EntityModel, ds};
+use std::collections::HashSet;
 
 #[derive(Entail, Debug, Default)]
 #[entail(rename_all = "camelCase")]
@@ -28,7 +28,9 @@ struct MinimalModel {
 
 impl Default for MinimalModel {
     fn default() -> Self {
-        Self { key: ds::Key::new("MinimalModel").with_name("juff") }
+        Self {
+            key: Self::adapter().create_key().with_name("juff"),
+        }
     }
 }
 
@@ -87,7 +89,7 @@ fn code_gen() {
 #[test]
 fn code_gen_minimal_model() {
     let min_mod = MinimalModel {
-        key: ds::Key::new("MinimalModel").with_name("wibz")
+        key: ds::Key::new("MinimalModel").with_name("wibz"),
     };
     let e = min_mod.to_ds_entity().unwrap();
     assert_eq!(&ds::Key::new("MinimalModel").with_name("wibz"), e.key());
