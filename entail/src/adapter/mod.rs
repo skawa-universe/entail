@@ -1,14 +1,22 @@
-use std::marker::PhantomData;
 use std::borrow::Cow;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
-use super::ds;
+use crate::{EntityModel, EntailError};
+use crate::ds;
 
-pub struct EntityAdapter<T> {
+pub struct EntityAdapter<T>
+where
+    T: EntityModel,
+{
     kind: &'static str,
     _marker: PhantomData<T>,
 }
 
-impl<T> EntityAdapter<T> {
+impl<T> EntityAdapter<T>
+where
+    T: EntityModel,
+{
     pub const fn new(kind: &'static str) -> Self {
         Self {
             kind,
@@ -26,5 +34,16 @@ impl<T> EntityAdapter<T> {
 
     pub fn create_key(&self) -> ds::Key {
         ds::Key::new(self.kind)
+    }
+
+    /// Fetches a single entity and automatically maps
+    pub async fn fetch_single(&self, ds: &ds::DatastoreShell, key: ds::Key) -> Result<T, EntailError> {
+        let key_string = key.to_string();
+        ds.get_single(key).await
+            .transpose()
+            .unwrap_or_else(|| {
+                Err(EntailError::simple(format!("Required {} not found", key_string)))
+            })
+            .and_then(|e| { T::from_ds_entity(&e) })
     }
 }

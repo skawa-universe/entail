@@ -1,6 +1,10 @@
+mod common;
+
+use std::sync::Arc;
+use common::init_ring;
+
 use entail::{
-    EntailError,
-    ds::{DatastoreShell, Entity, Key, Mutation, MutationBatch, Transaction, Value},
+    ds::{DatastoreShell, Entity, Key, Mutation, MutationBatch, Transaction, Value}, Entail, EntailError, EntityModel
 };
 
 #[tokio::test]
@@ -10,14 +14,13 @@ pub async fn test_create_conflict() {
         Ok(_) => {}
         Err(err) => {
             eprintln!("{:?}", err);
+            assert!(false, "Failed with error");
         }
     }
 }
 
 pub async fn create_conflict() -> Result<(), EntailError> {
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .unwrap();
+    init_ring();
 
     let ds = DatastoreShell::new("test-project", false, None)
         .await
@@ -68,5 +71,34 @@ pub async fn create_conflict() -> Result<(), EntailError> {
     let (a, b) = tokio::join!(ta, t2);
     println!("a tries: {}", a.unwrap());
     println!("b tries: {}", b.unwrap());
+    Ok(())
+}
+
+#[derive(Entail, Default)]
+struct Sample {
+    #[entail]
+    key: String,
+    #[entail]
+    value: i32,
+}
+
+#[tokio::test]
+pub async fn test_adapter() -> Result<(), EntailError> {
+    init_ring();
+
+    let ds = Arc::new(DatastoreShell::new("test-project", false, None)
+        .await
+        .map_err(|_| Default::default())?);
+    let s = Sample { key: "test".into(), value: 47 };
+    ds.commit(MutationBatch::new().upsert(s.to_ds_entity()?)).await?;
+    let a = Sample::adapter();
+    let rs = a.fetch_single(&ds, a.create_named_key("test")).await?;
+    assert_eq!(s.value, rs.value);
+    // get_single would return with None successfully
+    let non_existent = a.fetch_single(&ds, a.create_named_key("does_not_exist")).await;
+    assert!(non_existent.is_err());
+    // the error is forwarded from get_single, because this is a bad request
+    let incomplete = a.fetch_single(&ds, a.create_key()).await;
+    assert!(incomplete.is_err());
     Ok(())
 }

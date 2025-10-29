@@ -103,7 +103,8 @@ use std::{borrow::Cow, fmt};
 ///
 /// This trait provides the core functionality for converting between a Rust struct
 /// and a Cloud Datastore entity representation, enabling seamless persistence.
-pub trait EntityModel<T>: Sized {
+pub trait EntityModel: Sized
+{
     /// Converts the Rust struct instance into an `entail::Entity` (aliased as `ds::Entity`).
     ///
     /// This method maps the struct's fields to Datastore properties, applying any
@@ -130,7 +131,7 @@ pub trait EntityModel<T>: Sized {
     /// Returns a static reference to the EntityAdapter for type T.
     ///
     /// This adapter provides utility methods (like key creation) tied to the model.
-    fn adapter() -> &'static EntityAdapter<T>;
+    fn adapter() -> &'static EntityAdapter<Self>;
 }
 
 /// The primary error type used throughout the `entail` crate for operations that can fail.
@@ -149,7 +150,10 @@ pub struct EntailError {
 
 impl EntailError {
     pub fn simple(message: impl Into<std::borrow::Cow<'static, str>>) -> Self {
-        Self { message: message.into(), ds_error: None }
+        Self {
+            message: message.into(),
+            ds_error: None,
+        }
     }
 }
 

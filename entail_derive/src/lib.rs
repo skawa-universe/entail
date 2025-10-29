@@ -589,7 +589,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     let generated = quote! {
         static #adapter_name: entail::EntityAdapter<#name> = entail::EntityAdapter::new(#kind_str);
 
-        impl #impl_generics entail::EntityModel<#name> for #name #type_generics #where_clause {
+        impl #impl_generics entail::EntityModel for #name #type_generics #where_clause {
             fn from_ds_entity(e: &entail::ds::Entity) -> Result<Self, entail::EntailError> {
                 let null_value = entail::ds::Value::Null;
                 Ok(Self {
@@ -605,7 +605,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 Ok(e)
             }
 
-            fn adapter() -> &'static entail::EntityAdapter<#name> {
+            fn adapter() -> &'static entail::EntityAdapter<Self> {
                 &#adapter_name
             }
         }
