@@ -16,6 +16,8 @@ struct Model {
     bin: Vec<u8>,
     #[entail]
     related: Option<ds::Key>,
+    #[entail]
+    some_bool: bool,
     unrelated: Option<HashSet<String>>,
 }
 
@@ -47,6 +49,7 @@ fn code_gen() {
         ],
         bin: vec![1, 2, 3],
         unrelated: Some(HashSet::new()),
+        some_bool: true,
         ..Model::default()
     };
     let mut e = model.to_ds_entity().unwrap();
@@ -73,6 +76,10 @@ fn code_gen() {
         e.get("bin"),
         Some(ds::Value::Blob(vec![1, 2, 3].into())).as_ref()
     );
+    assert_eq!(
+        e.get("someBool"),
+        Some(ds::Value::boolean(true)).as_ref()
+    );
     assert_eq!(e.get("related"), Some(ds::Value::null()).as_ref());
     let related_key = ds::Key::new("Bizz").with_name("buzz");
     e.set_indexed("related", ds::Value::key(related_key.clone()));
@@ -81,6 +88,7 @@ fn code_gen() {
     assert_eq!(new_model.some_field, model.some_field);
     assert_eq!(new_model.key, model.key);
     assert_eq!(new_model.lookup, model.lookup);
+    assert!(new_model.some_bool);
     assert_eq!(new_model.related.as_ref(), Some(&related_key));
     assert!(new_model.unrelated.is_none());
     println!("{:?}", new_model);

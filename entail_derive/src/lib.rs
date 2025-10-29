@@ -473,7 +473,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         } else if path.is_ident("f32") || path.is_ident("f64") {
             gen_setter!(floating_point, (*val as f64))
         } else if path.is_ident("bool") {
-            gen_setter!(boolean, val)
+            gen_setter!(boolean, (*val))
         } else if is_key_type(path) {
             gen_setter!(key, (val.clone()))
         } else {
@@ -570,7 +570,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 } else if path.is_ident("f32") || path.is_ident("f64") {
                     gen_initializer!(FloatingPoint, (*val as #path))
                 } else if path.is_ident("bool") {
-                    gen_initializer!(Boolean, val)
+                    gen_initializer!(Boolean, (*val))
                 } else if is_key_type(path) {
                     gen_initializer!(Key, (val.clone()))
                 } else {
