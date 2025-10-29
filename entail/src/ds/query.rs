@@ -22,6 +22,53 @@ impl<T> QueryResult<T> {
     pub fn new(items: Vec<T>, end_cursor: Option<Vec<u8>>) -> Self {
         QueryResult { items, end_cursor }
     }
+
+    /// Consumes the QueryResult<T> and transforms its items into
+    /// a QueryResult<U> using the provided closure.
+    pub fn map<U, F>(self, f: F) -> QueryResult<U>
+    where
+        F: FnMut(T) -> U,
+    {
+        // 1. Destructure the original QueryResult.
+        let QueryResult { items, end_cursor } = self;
+
+        // 2. Map the items vector using the closure.
+        let transformed_items = items
+            .into_iter() // Consuming iterator
+            .map(f)
+            .collect();
+
+        // 3. Construct and return the new QueryResult<U>.
+        QueryResult {
+            items: transformed_items,
+            end_cursor, // The cursor is simply moved/copied.
+        }
+    }
+}
+
+impl<'a, T> QueryResult<T>
+where
+    T: 'a, // T must live at least as long as 'a
+{
+    /// Transforms a reference to the QueryResult<T> into a
+    /// QueryResult<U> using the provided closure.
+    /// This does *not* consume the original QueryResult.
+    pub fn map_ref<U, F>(&'a self, mut f: F) -> QueryResult<U>
+    where
+        F: FnMut(&'a T) -> U,
+    {
+        // 1. Iterate over references to the items.
+        let transformed_items = self.items
+            .iter()
+            .map(|item_ref| f(item_ref))
+            .collect();
+
+        // 2. Clone the end_cursor since the original is kept.
+        QueryResult {
+            items: transformed_items,
+            end_cursor: self.end_cursor.clone(),
+        }
+    }
 }
 
 impl From<google_datastore1::api::QueryResultBatch> for QueryResult<Entity> {

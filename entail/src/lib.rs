@@ -147,4 +147,10 @@ pub struct EntailError {
     pub ds_error: Option<google_datastore1::Error>,
 }
 
+impl EntailError {
+    pub fn simple(message: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self { message: message.into(), ds_error: None }
+    }
+}
+
 pub use adapter::*;
