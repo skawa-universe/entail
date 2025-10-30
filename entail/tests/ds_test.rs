@@ -1,10 +1,11 @@
 mod common;
 
-use std::sync::Arc;
 use common::init_ring;
+use std::sync::Arc;
 
 use entail::{
-    ds::{DatastoreShell, Entity, Key, Mutation, MutationBatch, Transaction, Value}, Entail, EntailError, EntityModel
+    Entail, EntailError, EntityModel,
+    ds::{DatastoreShell, Entity, Key, Mutation, MutationBatch, Transaction, Value},
 };
 
 #[tokio::test]
@@ -19,18 +20,29 @@ pub async fn test_create_conflict() {
     }
 }
 
+fn new_test_key() -> Key {
+    Key::new("Test")
+}
+
 pub async fn create_conflict() -> Result<(), EntailError> {
     init_ring();
 
     let ds = DatastoreShell::new("test-project", false, None)
         .await
         .map_err(|_| Default::default())?;
-    let key = Key::new("Test").with_name("one");
-    ds.commit(MutationBatch::new().add(Mutation::Upsert({
+    let keys: Vec<Key> = ds
+        .allocate_ids(&vec![new_test_key(), new_test_key()])
+        .await?
+        .into_iter()
+        .map(|key| new_test_key().with_name(format!("one_{}", key.id().unwrap())))
+        .collect();
+    let key = &keys[0];
+    println!("Keys: {}, {}", keys[0], keys[1]);
+    ds.commit(MutationBatch::new().upsert({
         let mut e = Entity::new(key.clone());
         e.set_indexed("glank", Value::unicode_string("cluff"));
         e
-    })))
+    }))
     .await?;
     let mut tries_a = 0;
     let ta = Transaction::new(&ds).run(|ts| {
@@ -71,6 +83,7 @@ pub async fn create_conflict() -> Result<(), EntailError> {
     let (a, b) = tokio::join!(ta, t2);
     println!("a tries: {}", a.unwrap());
     println!("b tries: {}", b.unwrap());
+    ds.commit(MutationBatch::new().delete_all(keys)).await?;
     Ok(())
 }
 
@@ -86,16 +99,24 @@ struct Sample {
 pub async fn test_adapter() -> Result<(), EntailError> {
     init_ring();
 
-    let ds = Arc::new(DatastoreShell::new("test-project", false, None)
-        .await
-        .map_err(|_| Default::default())?);
-    let s = Sample { key: "test".into(), value: 47 };
-    ds.commit(MutationBatch::new().upsert(s.to_ds_entity()?)).await?;
+    let ds = Arc::new(
+        DatastoreShell::new("test-project", false, None)
+            .await
+            .map_err(|_| Default::default())?,
+    );
+    let s = Sample {
+        key: "test".into(),
+        value: 47,
+    };
+    ds.commit(MutationBatch::new().upsert(s.to_ds_entity()?))
+        .await?;
     let a = Sample::adapter();
     let rs = a.fetch_single(&ds, a.create_named_key("test")).await?;
     assert_eq!(s.value, rs.value);
     // get_single would return with None successfully
-    let non_existent = a.fetch_single(&ds, a.create_named_key("does_not_exist")).await;
+    let non_existent = a
+        .fetch_single(&ds, a.create_named_key("does_not_exist"))
+        .await;
     assert!(non_existent.is_err());
     // the error is forwarded from get_single, because this is a bad request
     let incomplete = a.fetch_single(&ds, a.create_key()).await;

@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use crate::{EntityModel, EntailError};
 use crate::ds;

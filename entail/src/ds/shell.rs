@@ -1,8 +1,7 @@
 use super::super::*;
 
 use google_datastore1::api::{
-    BeginTransactionRequest, CommitRequest, LookupRequest, ReadOptions, ReadWrite, RollbackRequest,
-    RunQueryRequest, TransactionOptions,
+    AllocateIdsRequest, BeginTransactionRequest, CommitRequest, LookupRequest, ReadOptions, ReadWrite, ReserveIdsRequest, RollbackRequest, RunQueryRequest, TransactionOptions
 };
 use google_datastore1::yup_oauth2::{
     ApplicationDefaultCredentialsAuthenticator, ApplicationDefaultCredentialsFlowOpts,
@@ -24,11 +23,11 @@ pub struct DatastoreShell {
 }
 
 fn simple_error<T>(
-    s: Cow<'static, str>,
+    s: impl Into<Cow<'static, str>>,
     error: google_datastore1::Error,
 ) -> Result<T, EntailError> {
     Err(EntailError {
-        message: s,
+        message: s.into(),
         ds_error: Some(error),
     })
 }
@@ -145,7 +144,7 @@ impl DatastoreShell {
                     .and_then(|er| er.entity.map(|e| e.into()));
                 Ok(e)
             }
-            Err(err) => simple_error("Lookup error".into(), err),
+            Err(err) => simple_error("Lookup error", err),
         }
     }
 
@@ -192,7 +191,7 @@ impl DatastoreShell {
                     }
                 }
                 Err(err) => {
-                    return simple_error("Lookup error".into(), err);
+                    return simple_error("Lookup error", err);
                 }
             }
         }
@@ -226,7 +225,7 @@ impl DatastoreShell {
             .await;
         match response {
             Ok((_, result)) => Ok(result.batch.unwrap_or_default().into()),
-            Err(err) => simple_error("Query error".into(), err),
+            Err(err) => simple_error("Query error", err),
         }
     }
 
@@ -271,7 +270,7 @@ impl DatastoreShell {
             .await;
         match response {
             Ok((_, result)) => Ok(result.into()),
-            Err(err) => simple_error("Commit error".into(), err),
+            Err(err) => simple_error("Commit error", err),
         }
     }
 
@@ -310,7 +309,7 @@ impl DatastoreShell {
                 transaction: result.transaction,
                 ..self.clone()
             }),
-            Err(err) => simple_error("BeginTransaction error".into(), err),
+            Err(err) => simple_error("Begin transaction error", err),
         }
     }
 
@@ -340,7 +339,50 @@ impl DatastoreShell {
             .await;
         match response {
             Ok(_) => Ok(()),
-            Err(err) => simple_error("Rollback error".into(), err),
+            Err(err) => simple_error("Rollback error", err),
+        }
+    }
+
+    pub async fn allocate_ids(&self, incomplete_keys: &[ds::Key]) -> Result<Vec<ds::Key>, EntailError> {
+        let keys: Vec<google_datastore1::api::Key> =
+            incomplete_keys.iter().map(ds::Key::to_api).collect();
+        let request = AllocateIdsRequest {
+            database_id: self.database_id.clone(),
+            keys: Some(keys),
+        };
+        let response = self
+            .hub
+            .projects()
+            .allocate_ids(request, &self.project_id)
+            .doit()
+            .await;
+        match response {
+            Ok((_, result)) => Ok(result
+                .keys
+                .unwrap_or_default()
+                .into_iter()
+                .map(ds::Key::from)
+                .collect()),
+            Err(err) => simple_error("Allocate IDs error", err),
+        }
+    }
+
+    pub async fn reserve_ids(&self, id_keys: &[ds::Key]) -> Result<(), EntailError> {
+        let keys: Vec<google_datastore1::api::Key> =
+            id_keys.iter().map(ds::Key::to_api).collect();
+        let request = ReserveIdsRequest {
+            database_id: self.database_id.clone(),
+            keys: Some(keys),
+        };
+        let response = self
+            .hub
+            .projects()
+            .reserve_ids(request, &self.project_id)
+            .doit()
+            .await;
+        match response {
+            Ok(_) => Ok(()),
+            Err(err) => simple_error("Reserve IDs error", err),
         }
     }
 }

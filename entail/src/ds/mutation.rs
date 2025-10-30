@@ -109,12 +109,12 @@ impl From<google_datastore1::api::MutationResult> for MutationResult {
     }
 }
 
+/// Represents a batch of mutations to be applied to the Datastore
 #[derive(Debug)]
 pub struct MutationBatch {
     pub mutations: Vec<google_datastore1::api::Mutation>,
 }
 
-/// Represents a batch of mutations to be applied to the Datastore
 impl MutationBatch {
     /// Creates a new, empty `MutationBatch` instance.
     pub fn new() -> Self {
@@ -133,6 +133,22 @@ impl MutationBatch {
     pub fn add(self, mutation: Mutation) -> Self {
         let mut mutations = self.mutations;
         mutations.push(mutation.into());
+        Self { mutations, ..self }
+    }
+
+    /// Adds a collection of [`Mutation`]s to the batch.
+    ///
+    /// This method consumes `self` and returns the updated batch, allowing for
+    /// chaining of calls.
+    ///
+    /// ## Parameters
+    /// - `new_mutations`: An iterable of mutation operations to add.
+    pub fn add_all<I>(self, new_mutations: I) -> Self
+    where
+        I: IntoIterator<Item = Mutation>
+    {
+        let mut mutations = self.mutations;
+        mutations.extend(new_mutations.into_iter().map(Into::into));
         Self { mutations, ..self }
     }
 
@@ -163,6 +179,47 @@ impl MutationBatch {
     /// if the entity does not exist.
     pub fn delete(self, key: Key) -> Self {
         self.add(Mutation::Delete(key))
+    }
+
+    /// Convenience method to add multiple [`Mutation::Insert`] operations.
+    ///
+    /// Entities in the iterable must not already exist in the Datastore for the operation to succeed.
+    pub fn insert_all<I>(self, entities: I) -> Self
+    where
+        I: IntoIterator<Item = Entity>
+    {
+        self.add_all(entities.into_iter().map(Mutation::Insert))
+    }
+
+    /// Convenience method to add multiple [`Mutation::Update`] operations.
+    ///
+    /// Entities in the iterable must already exist in the Datastore for the operation to succeed.
+    pub fn update_all<I>(self, entities: I) -> Self
+    where
+        I: IntoIterator<Item = Entity>
+    {
+        self.add_all(entities.into_iter().map(Mutation::Update))
+    }
+
+    /// Convenience method to add multiple [`Mutation::Upsert`] operations.
+    ///
+    /// This will either insert new entities or overwrite existing ones.
+    pub fn upsert_all<I>(self, entities: I) -> Self
+    where
+        I: IntoIterator<Item = Entity>
+    {
+        self.add_all(entities.into_iter().map(Mutation::Upsert))
+    }
+
+    /// Convenience method to add multiple [`Mutation::Delete`] operations.
+    ///
+    /// Deletes the entities specified by the iterable of [`Key`]s. The operations
+    /// will not fail if any of the entities do not exist.
+    pub fn delete_all<I>(self, keys: I) -> Self
+    where
+        I: IntoIterator<Item = Key>
+    {
+        self.add_all(keys.into_iter().map(Mutation::Delete))
     }
 }
 
