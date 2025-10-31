@@ -22,7 +22,7 @@ struct Model {
 }
 
 #[derive(Entail, Debug)]
-#[entail(rename_all = "camelCase")]
+#[entail(rename_all = "camelCase", name = "MM")]
 struct MinimalModel {
     #[entail]
     key: ds::Key,
@@ -97,8 +97,8 @@ fn code_gen() {
 #[test]
 fn code_gen_minimal_model() {
     let min_mod = MinimalModel {
-        key: ds::Key::new("MinimalModel").with_name("wibz"),
+        key: MinimalModel::adapter().create_named_key("wibz"),
     };
     let e = min_mod.to_ds_entity().unwrap();
-    assert_eq!(&ds::Key::new("MinimalModel").with_name("wibz"), e.key());
+    assert_eq!(&ds::Key::new("MM").with_name("wibz"), e.key());
 }

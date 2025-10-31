@@ -23,8 +23,8 @@ impl<T> QueryResult<T> {
         QueryResult { items, end_cursor }
     }
 
-    /// Consumes the QueryResult<T> and transforms its items into
-    /// a QueryResult<U> using the provided closure.
+    /// Consumes the `QueryResult<T>` and transforms its items into
+    /// a `QueryResult<U>` using the provided closure.
     pub fn map<U, F>(self, f: F) -> QueryResult<U>
     where
         F: FnMut(T) -> U,
@@ -50,8 +50,8 @@ impl<'a, T> QueryResult<T>
 where
     T: 'a, // T must live at least as long as 'a
 {
-    /// Transforms a reference to the QueryResult<T> into a
-    /// QueryResult<U> using the provided closure.
+    /// Transforms a reference to the `QueryResult<T>` into a
+    /// `QueryResult<U>` using the provided closure.
     /// This does *not* consume the original QueryResult.
     pub fn map_ref<U, F>(&'a self, mut f: F) -> QueryResult<U>
     where
