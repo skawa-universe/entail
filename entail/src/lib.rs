@@ -103,8 +103,7 @@ use std::{borrow::Cow, fmt};
 ///
 /// This trait provides the core functionality for converting between a Rust struct
 /// and a Cloud Datastore entity representation, enabling seamless persistence.
-pub trait EntityModel: Sized
-{
+pub trait EntityModel: Sized {
     /// Converts the Rust struct instance into an `entail::Entity` (aliased as `ds::Entity`).
     ///
     /// This method maps the struct's fields to Datastore properties, applying any
@@ -134,12 +133,38 @@ pub trait EntityModel: Sized
     fn adapter() -> &'static EntityAdapter<Self>;
 }
 
+/// Represents the high-level category of error that occurred.
+#[derive(Debug)]
+pub enum EntailErrorKind {
+    /// An error of an indeterminate or unexpected nature.
+    Unknown,
+    /// The operation required an entity to exist in the Datastore (e.g., `fetch_single`), but it was **not found**.
+    RequiredEntityNotFound,
+    /// The underlying **Cloud Datastore API call** failed. This kind of error often
+    /// has an attached `ds_error` field providing the specific API context.
+    RequestFailure,
+    /// The transaction or operation was retried the maximum allowed times, but still did **not succeed**
+    /// (e.g., due to repeated contention or conflicts).
+    RetriesExhausted,
+    /// An error occurred during the conversion process between a Rust struct and a Datastore entity,
+    /// such as a **type mismatch** or a **missing required property**.
+    ModelMappingError,
+}
+
+impl Default for EntailErrorKind {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 /// The primary error type used throughout the `entail` crate for operations that can fail.
 ///
 /// This error encapsulates both logic errors within the library (such as data
 /// validation failures during mapping) and underlying Cloud Datastore API errors.
 #[derive(Debug, Default)]
 pub struct EntailError {
+    /// The general category of the error, indicating where in the process the failure occurred.
+    pub kind: EntailErrorKind,
     /// A human-readable message describing the nature of the error on the Entail level.
     pub message: std::borrow::Cow<'static, str>,
     /// An optional underlying error returned directly by the `google-datastore1`
@@ -149,8 +174,16 @@ pub struct EntailError {
 }
 
 impl EntailError {
-    pub fn simple(message: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+    /// Creates a new `EntailError` with a specified `kind` and message, leaving `ds_error` as `None`.
+    ///
+    /// This is typically used for library-level or mapping errors that don't originate
+    /// from a low-level Datastore API call failure.
+    pub fn simple(
+        kind: EntailErrorKind,
+        message: impl Into<std::borrow::Cow<'static, str>>,
+    ) -> Self {
         Self {
+            kind,
             message: message.into(),
             ds_error: None,
         }

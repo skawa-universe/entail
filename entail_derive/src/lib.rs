@@ -335,7 +335,11 @@ impl<'a> ParsedField<'a> {
 
 fn create_err(text: &str, span: proc_macro2::Span) -> proc_macro2::TokenStream {
     let err_str = syn::LitStr::new(text, span);
-    quote! { Err(entail::EntailError { message: #err_str.into(), ..entail::EntailError::default() }) }
+    quote! { Err(entail::EntailError {
+        kind: entail::EntailErrorKind::ModelMappingError,
+        message: #err_str.into(),
+        ..entail::EntailError::default()
+    }) }
 }
 
 #[proc_macro_derive(Entail, attributes(entail))]

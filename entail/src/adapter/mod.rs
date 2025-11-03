@@ -1,9 +1,14 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
-use crate::{EntityModel, EntailError};
 use crate::ds;
+use crate::{EntailError, EntityModel};
 
+/// The `EntityAdapter` provides model-specific utility methods for interacting
+/// with the Datastore kind of its type.
+///
+/// This adapter is automatically generated and made available via the
+/// [`EntityModel::adapter`] function for every struct deriving `#[derive(Entail)]`.
 pub struct EntityAdapter<T>
 where
     T: EntityModel,
@@ -16,6 +21,14 @@ impl<T> EntityAdapter<T>
 where
     T: EntityModel,
 {
+    /// Creates a new `EntityAdapter` instance.
+    ///
+    /// This is an internal constant function used by the `#[derive(Entail)]`
+    /// macro to construct the static adapter instance.
+    ///
+    /// ## Parameters
+    /// - `kind`: The static string slice representing the Datastore **Kind**
+    ///   name for the entity model.
     pub const fn new(kind: &'static str) -> Self {
         Self {
             kind,
@@ -23,26 +36,90 @@ where
         }
     }
 
+    /// Creates a new Datastore **Key** for the entity with a **string name**
+    /// component.
+    ///
+    /// This is a convenience wrapper around `create_key().with_name(name)`.
+    ///
+    /// ## Parameters
+    /// - `name`: The unique string identifier for the entity within its Kind.
+    ///
+    /// ## Returns
+    /// A new [`ds::Key`] instance with the model's Kind and the specified name.
     pub fn create_named_key(&self, name: impl Into<Cow<'static, str>>) -> ds::Key {
         self.create_key().with_name(name)
     }
 
+    /// Creates a new Datastore **Key** for the entity with an **integer ID**
+    /// component.
+    ///
+    /// This is a convenience wrapper around `create_key().with_id(id)`.
+    ///
+    /// ## Parameters
+    /// - `id`: The unique integer ID for the entity within its Kind.
+    ///
+    /// ## Returns
+    /// A new [`ds::Key`] instance with the model's Kind and the specified ID.
     pub fn create_id_key(&self, id: i64) -> ds::Key {
         self.create_key().with_id(id)
     }
 
+    /// Creates a new **incomplete** Datastore **Key** for the entity.
+    ///
+    /// The resulting Key contains only the **Kind** component, which is derived
+    /// from the struct name or the `#[entail(name = "...")]` attribute.
+    /// This is typically used as a base for creating complete Keys with
+    /// `with_name()` or `with_id()`.
+    ///
+    /// ## Returns
+    /// A new, incomplete [`ds::Key`] instance for the model's Kind.
     pub fn create_key(&self) -> ds::Key {
         ds::Key::new(self.kind)
     }
 
-    /// Fetches a single entity and automatically maps
-    pub async fn fetch_single(&self, ds: &ds::DatastoreShell, key: ds::Key) -> Result<T, EntailError> {
+    /// Creates a base Datastore **Query** object targeting this entity's **Kind**.
+    ///
+    /// The returned query is the starting point for building more complex
+    /// queries (e.g., adding filters, limits, and orders) that target this model.
+    ///
+    /// ## Returns
+    /// A [`ds::Query`] object pre-configured with the model's Kind.
+    pub fn query(&self) -> ds::Query {
+        ds::Query {
+            kind: self.kind.into(),
+            ..ds::Query::default()
+        }
+    }
+
+    /// Fetches a single entity from Datastore using the provided **Key** and
+    /// automatically maps the result to an instance of the Rust struct **T**.
+    ///
+    /// If no entity is found for the given key, an [`EntailError`] indicating
+    /// the entity was not found is returned.
+    ///
+    /// ## Parameters
+    /// - `ds`: A reference to the Datastore client shell.
+    /// - `key`: The complete [`ds::Key`] of the entity to fetch.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing the populated struct instance **T** on success,
+    /// or an [`EntailError`] if the entity is not found, or if the
+    /// deserialization via [`EntityModel::from_ds_entity`] fails.
+    pub async fn fetch_single(
+        &self,
+        ds: &ds::DatastoreShell,
+        key: ds::Key,
+    ) -> Result<T, EntailError> {
         let key_string = key.to_string();
-        ds.get_single(key).await
+        ds.get_single(key)
+            .await
             .transpose()
             .unwrap_or_else(|| {
-                Err(EntailError::simple(format!("Required {} not found", key_string)))
+                Err(EntailError::simple(
+                    crate::EntailErrorKind::RequiredEntityNotFound,
+                    format!("Required {} not found", key_string),
+                ))
             })
-            .and_then(|e| { T::from_ds_entity(&e) })
+            .and_then(|e| T::from_ds_entity(&e))
     }
 }

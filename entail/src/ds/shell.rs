@@ -1,7 +1,8 @@
 use super::super::*;
 
 use google_datastore1::api::{
-    AllocateIdsRequest, BeginTransactionRequest, CommitRequest, LookupRequest, ReadOptions, ReadWrite, ReserveIdsRequest, RollbackRequest, RunQueryRequest, TransactionOptions
+    AllocateIdsRequest, BeginTransactionRequest, CommitRequest, LookupRequest, ReadOptions,
+    ReadWrite, ReserveIdsRequest, RollbackRequest, RunQueryRequest, TransactionOptions,
 };
 use google_datastore1::yup_oauth2::{
     ApplicationDefaultCredentialsAuthenticator, ApplicationDefaultCredentialsFlowOpts,
@@ -23,10 +24,12 @@ pub struct DatastoreShell {
 }
 
 fn simple_error<T>(
+    kind: EntailErrorKind,
     s: impl Into<Cow<'static, str>>,
     error: google_datastore1::Error,
 ) -> Result<T, EntailError> {
     Err(EntailError {
+        kind,
         message: s.into(),
         ds_error: Some(error),
     })
@@ -144,7 +147,7 @@ impl DatastoreShell {
                     .and_then(|er| er.entity.map(|e| e.into()));
                 Ok(e)
             }
-            Err(err) => simple_error("Lookup error", err),
+            Err(err) => simple_error(EntailErrorKind::RequestFailure, "Lookup error", err),
         }
     }
 
@@ -191,7 +194,7 @@ impl DatastoreShell {
                     }
                 }
                 Err(err) => {
-                    return simple_error("Lookup error", err);
+                    return simple_error(EntailErrorKind::RequestFailure, "Lookup error", err);
                 }
             }
         }
@@ -225,7 +228,7 @@ impl DatastoreShell {
             .await;
         match response {
             Ok((_, result)) => Ok(result.batch.unwrap_or_default().into()),
-            Err(err) => simple_error("Query error", err),
+            Err(err) => simple_error(EntailErrorKind::RequestFailure, "Query error", err),
         }
     }
 
@@ -270,7 +273,7 @@ impl DatastoreShell {
             .await;
         match response {
             Ok((_, result)) => Ok(result.into()),
-            Err(err) => simple_error("Commit error", err),
+            Err(err) => simple_error(EntailErrorKind::RequestFailure, "Commit error", err),
         }
     }
 
@@ -309,7 +312,11 @@ impl DatastoreShell {
                 transaction: result.transaction,
                 ..self.clone()
             }),
-            Err(err) => simple_error("Begin transaction error", err),
+            Err(err) => simple_error(
+                EntailErrorKind::RequestFailure,
+                "Begin transaction error",
+                err,
+            ),
         }
     }
 
@@ -339,11 +346,14 @@ impl DatastoreShell {
             .await;
         match response {
             Ok(_) => Ok(()),
-            Err(err) => simple_error("Rollback error", err),
+            Err(err) => simple_error(EntailErrorKind::RequestFailure, "Rollback error", err),
         }
     }
 
-    pub async fn allocate_ids(&self, incomplete_keys: &[ds::Key]) -> Result<Vec<ds::Key>, EntailError> {
+    pub async fn allocate_ids(
+        &self,
+        incomplete_keys: &[ds::Key],
+    ) -> Result<Vec<ds::Key>, EntailError> {
         let keys: Vec<google_datastore1::api::Key> =
             incomplete_keys.iter().map(ds::Key::to_api).collect();
         let request = AllocateIdsRequest {
@@ -363,13 +373,12 @@ impl DatastoreShell {
                 .into_iter()
                 .map(ds::Key::from)
                 .collect()),
-            Err(err) => simple_error("Allocate IDs error", err),
+            Err(err) => simple_error(EntailErrorKind::RequestFailure, "Allocate IDs error", err),
         }
     }
 
     pub async fn reserve_ids(&self, id_keys: &[ds::Key]) -> Result<(), EntailError> {
-        let keys: Vec<google_datastore1::api::Key> =
-            id_keys.iter().map(ds::Key::to_api).collect();
+        let keys: Vec<google_datastore1::api::Key> = id_keys.iter().map(ds::Key::to_api).collect();
         let request = ReserveIdsRequest {
             database_id: self.database_id.clone(),
             keys: Some(keys),
@@ -382,7 +391,7 @@ impl DatastoreShell {
             .await;
         match response {
             Ok(_) => Ok(()),
-            Err(err) => simple_error("Reserve IDs error", err),
+            Err(err) => simple_error(EntailErrorKind::RequestFailure, "Reserve IDs error", err),
         }
     }
 }

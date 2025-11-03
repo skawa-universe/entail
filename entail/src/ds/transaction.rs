@@ -289,6 +289,7 @@ impl<'a> Transaction<'a> {
         loop {
             if retries_left == 0 {
                 return Err(EntailError {
+                    kind: EntailErrorKind::RetriesExhausted,
                     message: "Retries exhausted".into(),
                     ds_error: last_error,
                 });
