@@ -230,6 +230,10 @@ struct EntailFieldAttribute {
     /// #[entail(field)] - Forces it to be a regular field (overrides 'key' inference)
     #[darling(default)]
     pub field: bool,
+    /// #[entail(text)] - Marks this field as a legacy text value (Java Text class,
+    /// sets the meaning to 15)
+    #[darling(default)]
+    pub text: bool,
     /// #[entail(name = "custom_name")] - Overrides the Datastore property name
     #[darling(default)]
     pub name: Option<String>,
@@ -330,6 +334,14 @@ impl<'a> ParsedField<'a> {
 
     fn create_property_name_lit(&self) -> syn::LitStr {
         syn::LitStr::new(&self.property_name, self.name.span())
+    }
+
+    fn meaning_as_string(&self) -> proc_macro2::TokenStream {
+        if self.attrs.text {
+            quote! { Some(15) }
+        } else {
+            quote! { None }
+        }
     }
 }
 
@@ -438,48 +450,55 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         let path: &syn::Path = f.type_path();
         let array: bool = !path.is_ident("u8") && f.is_array();
         
-        let setter = if !f.attrs.unindexed && !f.attrs.unindexed_nulls || f.attrs.indexed {
-            quote! { set_indexed }
+        let indexed = if !f.attrs.unindexed && !f.attrs.unindexed_nulls || f.attrs.indexed {
+            quote! { true }
         } else {
-            quote! { set_unindexed }
+            quote! { false }
         };
 
         macro_rules! gen_setter {
-                ($ds_value:ident, $conversion:tt) => {
+                ($ds_value:ident, $conversion:tt, $meaning:tt) => {
                     if nullable {
                         Some(quote! {
-                            e.#setter(#property_name_lit, match &self.#name {
+                            e.set(#property_name_lit, match &self.#name {
                                 Some(val) => entail::ds::Value::$ds_value($conversion),
                                 None => entail::ds::Value::null(),
-                            });
+                            }, #indexed, $meaning);
                         })
                     } else if array {
                         Some(quote! {
-                            e.#setter(#property_name_lit, entail::ds::Value::array(self.#name.iter()
+                            e.set(#property_name_lit, entail::ds::Value::array(self.#name.iter()
                                 .map(|val| entail::ds::Value::$ds_value($conversion))
-                                .collect()));
+                                .collect()), #indexed, $meaning);
                         })
                     } else {
-                        Some(quote! {{ let val = &self.#name; e.#setter(#property_name_lit, entail::ds::Value::$ds_value($conversion)); }})
+                        Some(quote! {{
+                            let val = &self.#name;
+                            e.set(#property_name_lit,
+                                entail::ds::Value::$ds_value($conversion),
+                                #indexed, $meaning);
+                        }})
                     }
                 }
         }
 
         // blob implementation is very basic, only Vec<u8>
         if f.is_array() && path.is_ident("u8") {
-            gen_setter!(blob, (val.clone()))
+            gen_setter!(blob, (val.clone()), None)
         } else if is_string_type(path) {
-            gen_setter!(unicode_string, (val.clone()))
+            let meaning = f.meaning_as_string();
+            gen_setter!(unicode_string, (val.clone()), (#meaning))
         } else if is_cow_static_str_type(path) {
-            gen_setter!(unicode_string, val)
+            let meaning = f.meaning_as_string();
+            gen_setter!(unicode_string, val, (#meaning))
         } else if is_integer_type(path) {
-            gen_setter!(integer, (*val as i64))
+            gen_setter!(integer, (*val as i64), None)
         } else if path.is_ident("f32") || path.is_ident("f64") {
-            gen_setter!(floating_point, (*val as f64))
+            gen_setter!(floating_point, (*val as f64), None)
         } else if path.is_ident("bool") {
-            gen_setter!(boolean, (*val))
+            gen_setter!(boolean, (*val), None)
         } else if is_key_type(path) {
-            gen_setter!(key, (val.clone()))
+            gen_setter!(key, (val.clone()), None)
         } else {
             None
         }
@@ -526,7 +545,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                         if nullable {
                             let err = create_err(format!("Expected null or a value of {} in {}.{}", stringify!($ds_value), model_name, f.property_name).as_str(), name.span());
                             quote! {
-                                match e.get(#property_name_lit).unwrap_or(&null_value) {
+                                match e.get_value(#property_name_lit).unwrap_or(&null_value) {
                                     entail::ds::Value::Null => None,
                                     entail::ds::Value::$ds_value(val) => Some($conversion),
                                     _ => return #err,
@@ -535,7 +554,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                         } else if array {
                             let err = create_err(format!("Expected null, an array or single value of {} in {}.{}", stringify!($ds_value), model_name, f.property_name).as_str(), name.span());
                             quote! {
-                                match e.get(#property_name_lit).unwrap_or(&null_value) {
+                                match e.get_value(#property_name_lit).unwrap_or(&null_value) {
                                     entail::ds::Value::Null => vec![],
                                     entail::ds::Value::$ds_value(val) => vec![$conversion],
                                     entail::ds::Value::Array(arr) => {
@@ -553,7 +572,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                         } else {
                             let err = create_err(format!("Expected a value of {} in {}.{}", stringify!($ds_value), model_name, f.property_name).as_str(), name.span());
                             quote! {
-                                match e.get(#property_name_lit).unwrap_or(&null_value) {
+                                match e.get_value(#property_name_lit).unwrap_or(&null_value) {
                                     entail::ds::Value::$ds_value(val) => $conversion,
                                     _ => return #err,
                                 }

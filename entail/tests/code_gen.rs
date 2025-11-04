@@ -26,12 +26,15 @@ struct Model {
 struct MinimalModel {
     #[entail]
     key: ds::Key,
+    #[entail(text)]
+    text_field: String,
 }
 
 impl Default for MinimalModel {
     fn default() -> Self {
         Self {
             key: Self::adapter().create_key().with_name("juff"),
+            text_field: String::default(),
         }
     }
 }
@@ -59,12 +62,12 @@ fn code_gen() {
     assert!(e.is_indexed("lookup"));
     assert!(e.is_indexed("related"));
     assert_eq!(
-        e.get("someField"),
+        e.get_value("someField"),
         Some(ds::Value::unicode_string("bar")).as_ref()
     );
-    assert_eq!(e.get("key"), Some(ds::Value::integer(118999)).as_ref());
+    assert_eq!(e.get_value("key"), Some(ds::Value::integer(118999)).as_ref());
     assert_eq!(
-        e.get("lookup"),
+        e.get_value("lookup"),
         Some(ds::Value::array(vec![
             ds::Value::unicode_string("wow"),
             ds::Value::unicode_string("such"),
@@ -73,14 +76,11 @@ fn code_gen() {
         .as_ref()
     );
     assert_eq!(
-        e.get("bin"),
+        e.get_value("bin"),
         Some(ds::Value::Blob(vec![1, 2, 3].into())).as_ref()
     );
-    assert_eq!(
-        e.get("someBool"),
-        Some(ds::Value::boolean(true)).as_ref()
-    );
-    assert_eq!(e.get("related"), Some(ds::Value::null()).as_ref());
+    assert_eq!(e.get_value("someBool"), Some(ds::Value::boolean(true)).as_ref());
+    assert_eq!(e.get_value("related"), Some(ds::Value::null()).as_ref());
     let related_key = ds::Key::new("Bizz").with_name("buzz");
     e.set_indexed("related", ds::Value::key(related_key.clone()));
     let new_model = Model::from_ds_entity(&e).expect("Cannot create from entity");
@@ -98,7 +98,10 @@ fn code_gen() {
 fn code_gen_minimal_model() {
     let min_mod = MinimalModel {
         key: MinimalModel::adapter().create_named_key("wibz"),
+        text_field: "foo".into(),
     };
     let e = min_mod.to_ds_entity().unwrap();
     assert_eq!(&ds::Key::new("MM").with_name("wibz"), e.key());
+    let field = e.get("textField").unwrap();
+    assert_eq!(field.meaning().unwrap(), 15);
 }

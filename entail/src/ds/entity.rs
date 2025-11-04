@@ -1,13 +1,23 @@
 use super::super::*;
 use std::collections::HashMap;
 
+/// Represents the specific variant of the last path element of a Datastore Key.
+///
+/// A key is either incomplete (no ID/Name), named, or identified by an integer ID.
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub enum KeyVariant {
+    /// A string name component for the key path element.
     Name(Cow<'static, str>),
+    /// An integer ID component for the key path element.
     Id(i64),
+    /// An incomplete key, meaning it has a Kind but neither an ID nor a Name.
     Incomplete,
 }
 
+/// A representation of a Google Cloud Datastore Key.
+///
+/// This structure encapsulates the **Kind** of the entity, its **ID or Name**,
+/// and an optional **parent Key** to establish entity hierarchy.
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct Key {
     kind: Cow<'static, str>,
@@ -16,6 +26,13 @@ pub struct Key {
 }
 
 impl Key {
+    /// Creates a new **incomplete** Key with only the specified Kind.
+    ///
+    /// This key cannot be used to fetch or update an entity but is the base for
+    /// creating complete Keys.
+    ///
+    /// ## Parameters
+    /// - `kind`: The Datastore Kind name (e.g., `"User"`, `"Product"`).
     pub fn new(kind: impl Into<Cow<'static, str>>) -> Self {
         Key {
             kind: kind.into(),
@@ -24,10 +41,12 @@ impl Key {
         }
     }
 
+    /// Gets a string slice reference to the Kind of the entity represented by this Key.
     pub fn kind(&self) -> &str {
         self.kind.as_ref()
     }
 
+    /// Gets the string name component of the Key, if it has one.
     pub fn name(&self) -> Option<&str> {
         if let KeyVariant::Name(name) = &self.variant {
             Some(name.as_ref())
@@ -36,6 +55,7 @@ impl Key {
         }
     }
 
+    /// Gets the integer ID component of the Key, if it has one.
     pub fn id(&self) -> Option<i64> {
         if let KeyVariant::Id(id) = &self.variant {
             Some(*id)
@@ -44,10 +64,14 @@ impl Key {
         }
     }
 
+    /// Gets a reference to the parent Key, if this Key is part of a key path.
     pub fn parent(&self) -> Option<&Key> {
         self.parent.as_deref()
     }
 
+    /// Consumes the current Key and returns a new one with the specified **string name**.
+    ///
+    /// This replaces any existing ID or Name component.
     pub fn with_name(self, name: impl Into<Cow<'static, str>>) -> Self {
         Key {
             variant: KeyVariant::Name(name.into()),
@@ -55,6 +79,9 @@ impl Key {
         }
     }
 
+    /// Consumes the current Key and returns a new one with the specified **integer ID**.
+    ///
+    /// This replaces any existing ID or Name component.
     pub fn with_id(self, id: i64) -> Self {
         Key {
             variant: KeyVariant::Id(id),
@@ -62,6 +89,9 @@ impl Key {
         }
     }
 
+    /// Consumes the current Key and returns a new one with a single parent Key.
+    ///
+    /// The parent Key is boxed internally.
     pub fn with_parent(self, parent: Key) -> Self {
         Key {
             parent: Some(Box::new(parent)),
@@ -69,6 +99,9 @@ impl Key {
         }
     }
 
+    /// Consumes the current Key and returns a new one with no parent.
+    ///
+    /// This clears any existing parent Key.
     pub fn with_no_parent(self) -> Self {
         Key {
             parent: None,
@@ -76,6 +109,7 @@ impl Key {
         }
     }
 
+    /// Convenience method that consumes the current Key and returns a new one with an optional boxed parent.
     pub fn with_boxed_parent(self, parent: Option<Box<Key>>) -> Self {
         Key {
             parent: parent,
@@ -83,6 +117,8 @@ impl Key {
         }
     }
 
+    /// Converts this `entail::ds::Key` reference into the lower-level
+    /// `google_datastore1::api::Key` representation.
     pub fn to_api(&self) -> google_datastore1::api::Key {
         let mut path = Vec::new();
         self.push_path_elements(&mut path);
@@ -92,6 +128,8 @@ impl Key {
         }
     }
 
+    /// Recursively traverses the key path (starting from the root parent) and pushes
+    /// the path elements (Kind + ID/Name) into the output vector.
     fn push_path_elements(&self, out: &mut Vec<google_datastore1::api::PathElement>) {
         if let Some(parent) = &self.parent {
             parent.push_path_elements(out);
@@ -114,6 +152,8 @@ impl Key {
         });
     }
 
+    /// Recursively traverses and consumes the key path, pushing owned path elements
+    /// into the output vector. Used for `Into<google_datastore1::api::Key>`.
     fn consume_and_push_path_elements(self, out: &mut Vec<google_datastore1::api::PathElement>) {
         if let Some(parent) = &self.parent {
             parent.push_path_elements(out);
@@ -140,6 +180,7 @@ impl Key {
 }
 
 impl Into<google_datastore1::api::Key> for Key {
+    /// Converts `entail::ds::Key` into the lower-level API `Key` by consuming it.
     fn into(self) -> google_datastore1::api::Key {
         let mut path = Vec::new();
         self.consume_and_push_path_elements(&mut path);
@@ -150,40 +191,10 @@ impl Into<google_datastore1::api::Key> for Key {
     }
 }
 
-impl From<google_datastore1::api::Entity> for Entity {
-    fn from(value: google_datastore1::api::Entity) -> Entity {
-        let mut result = Entity::new(value.key.expect("Missing key").into());
-        if let Some(props) = value.properties {
-            for (key, value) in props.into_iter() {
-                let indexed = value.exclude_from_indexes.unwrap_or(false);
-                result.set(key, value.into(), indexed);
-            }
-        }
-        result
-    }
-}
-
-impl Into<google_datastore1::api::Entity> for Entity {
-    fn into(self) -> google_datastore1::api::Entity {
-        google_datastore1::api::Entity {
-            key: Some(self.key.into()),
-            properties: Some(
-                self.properties
-                    .into_iter()
-                    .map(|(key, value)| {
-                        let indexed = value.indexed;
-                        let mut val: google_datastore1::api::Value = value.value.into();
-                        val.exclude_from_indexes = Some(!indexed);
-                        (key.into_owned(), val)
-                    })
-                    .collect(),
-            ),
-            ..Default::default()
-        }
-    }
-}
-
 impl From<google_datastore1::api::Key> for Key {
+    /// Converts the lower-level API `Key` into the higher-level `entail::Key`.
+    ///
+    /// This reconstructs the parent-child key hierarchy from the API's path elements.
     fn from(value: google_datastore1::api::Key) -> Key {
         let mut key_opt = None;
         for element in value.path.expect("Missing key path") {
@@ -203,6 +214,8 @@ impl From<google_datastore1::api::Key> for Key {
 }
 
 impl fmt::Display for Key {
+    /// Formats the Key into a canonical Datastore-like string representation
+    /// (e.g., `ParentKind("name") / ChildKind(id:123)`).
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(pk) = &self.parent {
             pk.fmt(f)?;
@@ -224,51 +237,69 @@ impl fmt::Display for Key {
     }
 }
 
+/// Represents the various data types that a single Datastore property can hold.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Value {
+    /// Represents the Datastore Null value.
     Null,
+    /// An integer value, mapped to `i64`.
     Integer(i64),
+    /// A boolean value.
     Boolean(bool),
+    /// Binary data.
     Blob(Vec<u8>),
+    /// A string value, represented as owned or borrowed static string.
     UnicodeString(Cow<'static, str>),
+    /// A floating point value, mapped to `f64`.
     FloatingPoint(f64),
+    /// An array/list of other `Value`s.
     Array(Vec<Value>),
+    /// A Datastore Key value.
     Key(Key),
 }
 
 impl Value {
+    /// Creates a `Value::Null`.
     pub fn null() -> Value {
         Value::Null
     }
 
+    /// Creates a `Value::Integer`.
     pub fn integer(val: i64) -> Value {
         Value::Integer(val)
     }
 
+    /// Creates a `Value::Boolean`.
     pub fn boolean(val: bool) -> Value {
         Value::Boolean(val)
     }
 
+    /// Creates a `Value::Blob` from anything that can be converted into `Vec<u8>`.
     pub fn blob(val: impl Into<Vec<u8>>) -> Value {
         Value::Blob(val.into())
     }
 
+    /// Creates a `Value::UnicodeString` from anything that can be converted into `Cow<'static, str>`.
     pub fn unicode_string(s: impl Into<Cow<'static, str>>) -> Value {
         Value::UnicodeString(s.into())
     }
 
+    /// Creates a `Value::FloatingPoint`.
     pub fn floating_point(val: f64) -> Value {
         Value::FloatingPoint(val)
     }
 
+    /// Creates a `Value::Array`.
     pub fn array(val: Vec<Value>) -> Value {
         Value::Array(val)
     }
 
+    /// Creates a `Value::Key`.
     pub fn key(key: Key) -> Value {
         Value::Key(key)
     }
 
+    /// Returns a string slice of the value if it is `UnicodeString`.
     pub fn string_value(&self) -> Option<&str> {
         match self {
             Self::UnicodeString(str) => Some(str.as_ref()),
@@ -276,6 +307,7 @@ impl Value {
         }
     }
 
+    /// Returns a reference to the Key if the value is `Key`.
     pub fn key_value(&self) -> Option<&Key> {
         match self {
             Self::Key(key) => Some(key),
@@ -283,6 +315,7 @@ impl Value {
         }
     }
 
+    /// Returns a byte slice of the value if it is `Blob`.
     pub fn blob_value(&self) -> Option<&[u8]> {
         match self {
             Self::Blob(bytes) => Some(bytes),
@@ -290,6 +323,7 @@ impl Value {
         }
     }
 
+    /// Checks if the value is `Value::Null`.
     pub fn is_null(&self) -> bool {
         match self {
             Self::Null => true,
@@ -299,6 +333,7 @@ impl Value {
 }
 
 impl From<google_datastore1::api::Value> for Value {
+    /// Converts the lower-level API `Value` into the higher-level `entail::Value`.
     fn from(value: google_datastore1::api::Value) -> Self {
         if let Some(integer_value) = value.integer_value {
             Value::Integer(integer_value)
@@ -336,6 +371,7 @@ impl From<google_datastore1::api::Value> for Value {
 }
 
 impl Into<google_datastore1::api::Value> for Value {
+    /// Converts `entail::Value` into the lower-level API `Value` by consuming it.
     fn into(self) -> google_datastore1::api::Value {
         let mut ds_value = google_datastore1::api::Value::default();
 
@@ -378,6 +414,7 @@ impl Into<google_datastore1::api::Value> for Value {
 }
 
 impl fmt::Display for Value {
+    /// Formats the Value for display, showing its type and content (e.g., `int(42)`, `string(hello)`).
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Null => write!(f, "null"),
@@ -399,23 +436,34 @@ impl fmt::Display for Value {
     }
 }
 
+/// Represents a single Datastore property, which includes the `Value`,
+/// its **indexing** status, and an optional **meaning** hint.
 #[derive(PartialEq, Debug, Clone)]
 pub struct PropertyValue {
     value: Value,
     indexed: bool,
+    meaning: Option<i32>,
 }
 
 impl PropertyValue {
+    /// Gets a reference to the raw `Value` held by the property.
     pub fn value(&self) -> &Value {
         &self.value
     }
 
+    /// Returns `true` if the property value is indexed in Datastore.
     pub fn is_indexed(&self) -> bool {
         self.indexed
+    }
+
+    /// Gets the optional integer meaning (e.g., used for specific types like geospatial points).
+    pub fn meaning(&self) -> Option<i32> {
+        self.meaning.clone()
     }
 }
 
 impl fmt::Display for PropertyValue {
+    /// Formats the property value, including its indexing status.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.value.fmt(f)?;
         if self.indexed {
@@ -426,6 +474,9 @@ impl fmt::Display for PropertyValue {
     }
 }
 
+/// A representation of a Google Cloud Datastore **Entity**.
+///
+/// It holds the unique `Key` for the entity and a `HashMap` of all its properties.
 #[derive(Debug, Clone)]
 pub struct Entity {
     key: Key,
@@ -433,6 +484,7 @@ pub struct Entity {
 }
 
 impl Entity {
+    /// Creates a new Entity with a complete or incomplete Key.
     pub fn new(key: Key) -> Self {
         Self {
             key,
@@ -440,6 +492,7 @@ impl Entity {
         }
     }
 
+    /// Creates a new Entity with an incomplete Key of the specified Kind.
     pub fn of_kind(kind: impl Into<Cow<'static, str>>) -> Self {
         Self {
             key: Key::new(kind),
@@ -447,51 +500,78 @@ impl Entity {
         }
     }
 
+    /// Gets a reference to the entity's unique `Key`.
     pub fn key(&self) -> &Key {
         &self.key
     }
 
+    /// Returns an iterator over all raw property entries (name and `PropertyValue`).
     pub fn property_iter_raw(&self) -> impl Iterator<Item = (&Cow<'static, str>, &PropertyValue)> {
         self.properties.iter()
     }
 
+    /// Returns an iterator over property names and their raw `Value` (excluding indexing info).
     pub fn property_iter(&self) -> impl Iterator<Item = (&Cow<'static, str>, &Value)> {
-        self.properties.iter().map(|(key, value)| (key, value.value()))
+        self.properties
+            .iter()
+            .map(|(key, value)| (key, value.value()))
     }
 
+    /// Sets the Key for the entity. Returns a mutable reference to self.
     pub fn set_key(&mut self, key: Key) -> &mut Self {
         self.key = key;
         self
     }
 
+    /// Sets a property on the entity with full control over indexing and meaning.
+    ///
+    /// ## Parameters
+    /// - `name`: The property name.
+    /// - `value`: The property value.
+    /// - `indexed`: Whether the property should be indexed.
+    /// - `meaning`: An optional meaning hint for the Datastore API.
     pub fn set(
         &mut self,
         name: impl Into<Cow<'static, str>>,
         value: Value,
         indexed: bool,
+        meaning: Option<i32>,
     ) -> &mut Self {
-        self.properties
-            .insert(name.into(), PropertyValue { value, indexed });
+        self.properties.insert(
+            name.into(),
+            PropertyValue {
+                value,
+                indexed,
+                meaning,
+            },
+        );
         self
     }
 
+    /// Sets a property, forcing it to be **unindexed** (convenience function).
     pub fn set_unindexed(&mut self, name: impl Into<Cow<'static, str>>, value: Value) -> &mut Self {
-        self.set(name, value, false)
+        self.set(name, value, false, None)
     }
 
+    /// Sets a property, forcing it to be **indexed** (convenience function).
     pub fn set_indexed(&mut self, name: impl Into<Cow<'static, str>>, value: Value) -> &mut Self {
-        self.set(name, value, true)
+        self.set(name, value, true, None)
     }
 
+    /// Sets a property to be **indexed** only if its `value` is not `Value::Null`.
+    ///
+    /// This is useful for implementing `#[entail(unindexed_nulls)]`.
     pub fn set_indexed_if_not_null(
         &mut self,
         name: impl Into<Cow<'static, str>>,
         value: Value,
     ) -> &mut Self {
         let is_null = value.is_null();
-        self.set(name, value, !is_null)
+        // Indexed is true if not null
+        self.set(name, value, !is_null, None)
     }
 
+    /// Checks if a property with the given name is indexed. Returns `false` if the property doesn't exist.
     pub fn is_indexed(&self, name: &str) -> bool {
         self.properties
             .get(name)
@@ -499,12 +579,19 @@ impl Entity {
             .unwrap_or(false)
     }
 
-    pub fn get(&self, name: &str) -> Option<&Value> {
+    /// Gets a reference to the raw `Value` of a property by name.
+    pub fn get_value(&self, name: &str) -> Option<&Value> {
         self.properties.get(name).map(|ev| &ev.value)
+    }
+
+    /// Gets a reference to the full `PropertyValue` (including indexing) of a property by name.
+    pub fn get(&self, name: &str) -> Option<&PropertyValue> {
+        self.properties.get(name)
     }
 }
 
 impl fmt::Display for Entity {
+    /// Formats the Entity, showing its Key and a list of all its properties.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.key.fmt(f)?;
         write!(f, " {{")?;
@@ -512,6 +599,56 @@ impl fmt::Display for Entity {
             write!(f, "\n  {}: {},", key, value)?;
         }
         write!(f, "\n}}")
+    }
+}
+
+impl From<google_datastore1::api::Entity> for Entity {
+    /// Converts the lower-level API `Entity` into the higher-level `entail::ds::Entity`.
+    fn from(value: google_datastore1::api::Entity) -> Entity {
+        let mut result = Entity::new(value.key.expect("Missing key").into());
+        if let Some(props) = value.properties {
+            for (key, value) in props.into_iter() {
+                let indexed = !value.exclude_from_indexes.unwrap_or(false);
+                let meaning = value.meaning.clone();
+                result.set(key, value.into(), indexed, meaning);
+            }
+        }
+        result
+    }
+}
+
+impl Into<google_datastore1::api::Entity> for Entity {
+    /// Converts `entail::ds::Entity` into the lower-level API `Entity` by consuming it.
+    fn into(self) -> google_datastore1::api::Entity {
+        google_datastore1::api::Entity {
+            key: Some(self.key.into()),
+            properties: Some(
+                self.properties
+                    .into_iter()
+                    .map(|(key, value)| {
+                        let indexed = value.indexed;
+                        let meaning = value.meaning.clone();
+                        let mut val: google_datastore1::api::Value = value.value.into();
+                        // Special handling for Array values, where indexing is set on array elements.
+                        if let Some(array) = &mut val.array_value {
+                            if let Some(values) = &mut array.values {
+                                for item in values.iter_mut() {
+                                    // The API uses `exclude_from_indexes`, so we negate `indexed`.
+                                    item.exclude_from_indexes = Some(!indexed);
+                                    item.meaning = meaning;
+                                }
+                            }
+                        } else {
+                            // Set indexing flag for non-Array values.
+                            val.exclude_from_indexes = Some(!indexed);
+                            val.meaning = meaning;
+                        }
+                        (key.into_owned(), val)
+                    })
+                    .collect(),
+            ),
+            ..Default::default()
+        }
     }
 }
 
@@ -587,7 +724,7 @@ mod tests {
         assert_eq!(entity.key().kind(), "Bizz");
         assert_eq!(entity.key().id(), Some(1234));
         assert_eq!(
-            entity.get("name").and_then(|v| v.string_value()),
+            entity.get_value("name").and_then(|v| v.string_value()),
             Some("Some Name")
         );
         assert_eq!(entity.is_indexed("name"), true);
@@ -597,5 +734,39 @@ mod tests {
         assert_eq!(entity.is_indexed("tags"), true);
         assert_eq!(entity.is_indexed("related_key"), true);
         assert_eq!(entity.is_indexed("non_existent_property"), false);
+        let ce: google_datastore1::api::Entity = entity.into();
+        assert_eq!(
+            ce.properties
+                .as_ref()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .exclude_from_indexes,
+            Some(false)
+        );
+        assert_eq!(
+            ce.properties
+                .as_ref()
+                .unwrap()
+                .get("tags")
+                .unwrap()
+                .exclude_from_indexes,
+            None
+        );
+        assert!(
+            ce.properties
+                .as_ref()
+                .unwrap()
+                .get("tags")
+                .unwrap()
+                .array_value
+                .as_ref()
+                .unwrap()
+                .values
+                .as_ref()
+                .unwrap()
+                .iter()
+                .all(|item| item.exclude_from_indexes.unwrap() == false)
+        );
     }
 }
