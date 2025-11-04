@@ -58,6 +58,14 @@ Here are the available options for fields:
     attributes might suggest it's a primary key. This is useful for disambiguation, for example,
     on a field named `key`.
 
+* `#[entail(text)]`
+    This option specifies that the string field should be encoded as a **large block of text**.
+    This is primarily for **compatibility with App Engine Standard Java clients** (by setting
+    the property's internal `meaning` to `entail::ds::MEANING_TEXT`). Cloud Datastore does not
+    strictly require this flag for long strings, as any unindexed string property can store
+    values up to 1 MiB. However, this flag explicitly marks the field for correct decoding as a
+    Text type in older environments. **Text properties are always unindexed.**
+
 * `#[entail(name = "custom_name")]`
     Overrides the Datastore property name for a specific field. By default, the property name is
     the same as the Rust field name, potentially modified by the `rename_all` struct attribute.

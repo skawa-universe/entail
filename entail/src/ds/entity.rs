@@ -436,6 +436,8 @@ impl fmt::Display for Value {
     }
 }
 
+pub static MEANING_TEXT: i32 = 15;
+
 /// Represents a single Datastore property, which includes the `Value`,
 /// its **indexing** status, and an optional **meaning** hint.
 #[derive(PartialEq, Debug, Clone)]
@@ -560,15 +562,27 @@ impl Entity {
 
     /// Sets a property to be **indexed** only if its `value` is not `Value::Null`.
     ///
-    /// This is useful for implementing `#[entail(unindexed_nulls)]`.
-    pub fn set_indexed_if_not_null(
+    /// This is useful for implementing various value-dependent indexing behaviors.
+    pub fn set_advanced(
         &mut self,
         name: impl Into<Cow<'static, str>>,
         value: Value,
+        index_values: bool,
+        index_nulls: bool,
+        meaning: Option<i32>,
     ) -> &mut Self {
-        let is_null = value.is_null();
-        // Indexed is true if not null
-        self.set(name, value, !is_null, None)
+        let effective_value = match &value {
+            Value::Array(values) => if values.is_empty() {
+                Value::null()
+            } else {
+                value
+            },
+            _ => value
+        };
+        let is_null = effective_value.is_null();
+        let indexed = if is_null { index_nulls } else { index_values };
+        // Null values have no meaning property
+        self.set(name, effective_value, indexed, if is_null { None } else { meaning })
     }
 
     /// Checks if a property with the given name is indexed. Returns `false` if the property doesn't exist.

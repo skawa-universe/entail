@@ -18,6 +18,10 @@ struct Model {
     related: Option<ds::Key>,
     #[entail]
     some_bool: bool,
+    #[entail(text)]
+    opt_text: Option<String>,
+    #[entail(text)]
+    present_text: String,
     unrelated: Option<HashSet<String>>,
 }
 
@@ -53,6 +57,7 @@ fn code_gen() {
         bin: vec![1, 2, 3],
         unrelated: Some(HashSet::new()),
         some_bool: true,
+        present_text: "present text".into(),
         ..Model::default()
     };
     let mut e = model.to_ds_entity().unwrap();
@@ -81,6 +86,13 @@ fn code_gen() {
     );
     assert_eq!(e.get_value("someBool"), Some(ds::Value::boolean(true)).as_ref());
     assert_eq!(e.get_value("related"), Some(ds::Value::null()).as_ref());
+    let raw_entity: google_datastore1::api::Entity = e.clone().into();
+    let null_text_field = raw_entity.properties.as_ref().unwrap().get("optText").unwrap();
+    assert_eq!(null_text_field.meaning, None);
+    assert_eq!(null_text_field.exclude_from_indexes, Some(false));
+    let present_text_field = raw_entity.properties.as_ref().unwrap().get("presentText").unwrap();
+    assert_eq!(present_text_field.meaning, Some(ds::MEANING_TEXT));
+    assert_eq!(present_text_field.exclude_from_indexes, Some(true));
     let related_key = ds::Key::new("Bizz").with_name("buzz");
     e.set_indexed("related", ds::Value::key(related_key.clone()));
     let new_model = Model::from_ds_entity(&e).expect("Cannot create from entity");
@@ -103,5 +115,7 @@ fn code_gen_minimal_model() {
     let e = min_mod.to_ds_entity().unwrap();
     assert_eq!(&ds::Key::new("MM").with_name("wibz"), e.key());
     let field = e.get("textField").unwrap();
-    assert_eq!(field.meaning().unwrap(), 15);
+    assert_eq!(field.meaning().unwrap(), ds::MEANING_TEXT);
+    let field = e.get("opt").unwrap();
+    assert_eq!(field.meaning(), None);
 }

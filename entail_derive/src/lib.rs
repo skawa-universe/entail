@@ -231,7 +231,7 @@ struct EntailFieldAttribute {
     #[darling(default)]
     pub field: bool,
     /// #[entail(text)] - Marks this field as a legacy text value (Java Text class,
-    /// sets the meaning to 15)
+    /// sets the meaning to `entail::ds::MEANING_TEXT`)
     #[darling(default)]
     pub text: bool,
     /// #[entail(name = "custom_name")] - Overrides the Datastore property name
@@ -338,7 +338,7 @@ impl<'a> ParsedField<'a> {
 
     fn meaning_as_string(&self) -> proc_macro2::TokenStream {
         if self.attrs.text {
-            quote! { Some(15) }
+            quote! { Some(entail::ds::MEANING_TEXT) }
         } else {
             quote! { None }
         }
@@ -450,33 +450,30 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         let path: &syn::Path = f.type_path();
         let array: bool = !path.is_ident("u8") && f.is_array();
         
-        let indexed = if !f.attrs.unindexed && !f.attrs.unindexed_nulls || f.attrs.indexed {
-            quote! { true }
-        } else {
-            quote! { false }
-        };
+        let index_values = !f.attrs.text && (!f.attrs.unindexed || f.attrs.indexed);
+        let index_nulls = !f.attrs.unindexed_nulls && !f.attrs.unindexed;
 
         macro_rules! gen_setter {
                 ($ds_value:ident, $conversion:tt, $meaning:tt) => {
                     if nullable {
                         Some(quote! {
-                            e.set(#property_name_lit, match &self.#name {
+                            e.set_advanced(#property_name_lit, match &self.#name {
                                 Some(val) => entail::ds::Value::$ds_value($conversion),
                                 None => entail::ds::Value::null(),
-                            }, #indexed, $meaning);
+                            }, #index_values, #index_nulls, $meaning);
                         })
                     } else if array {
                         Some(quote! {
-                            e.set(#property_name_lit, entail::ds::Value::array(self.#name.iter()
+                            e.set_advanced(#property_name_lit, entail::ds::Value::array(self.#name.iter()
                                 .map(|val| entail::ds::Value::$ds_value($conversion))
-                                .collect()), #indexed, $meaning);
+                                .collect()), #index_values, #index_nulls, $meaning);
                         })
                     } else {
                         Some(quote! {{
                             let val = &self.#name;
-                            e.set(#property_name_lit,
+                            e.set_advanced(#property_name_lit,
                                 entail::ds::Value::$ds_value($conversion),
-                                #indexed, $meaning);
+                                #index_values, #index_nulls, $meaning);
                         }})
                     }
                 }
