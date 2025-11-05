@@ -15,6 +15,16 @@ use hyper_util::rt::TokioExecutor;
 use std::error::Error;
 use std::sync::Arc;
 
+/// A shell around google_datastore1's Datastore service that simplifies access to the
+/// Cloud Datastore API.
+///
+/// A `DatastoreShell` instance can operate in one of two modes:
+/// 1. **Standalone:** It handles a single, implicit transaction for each operation.
+/// 2. **Transactional:** It is tied to a specific, ongoing transaction. These
+///    instances are created by calling `begin_transaction` on a standalone shell and
+///    are used to perform a series of related operations within a single atomic unit.
+///
+/// You cannot directly create a transactional `DatastoreShell` instance.
 #[derive(Clone)]
 pub struct DatastoreShell {
     pub project_id: String,
@@ -35,16 +45,6 @@ fn simple_error<T>(
     })
 }
 
-/// A shell around google_datastore1's Datastore service that simplifies access to the
-/// Cloud Datastore API.
-///
-/// A `DatastoreShell` instance can operate in one of two modes:
-/// 1. **Standalone:** It handles a single, implicit transaction for each operation.
-/// 2. **Transactional:** It is tied to a specific, ongoing transaction. These
-///    instances are created by calling `begin_transaction` on a standalone shell and
-///    are used to perform a series of related operations within a single atomic unit.
-///
-/// You cannot directly create a transactional `DatastoreShell` instance.
 impl DatastoreShell {
     /// Initializes a new `DatastoreShell` instance.
     ///
