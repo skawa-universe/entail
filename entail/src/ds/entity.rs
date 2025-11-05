@@ -3,20 +3,20 @@ use std::collections::HashMap;
 
 /// Represents the specific variant of the last path element of a Datastore Key.
 ///
-/// A key is either incomplete (no ID/Name), named, or identified by an integer ID.
+/// A key is either incomplete (no ID/name), named, or identified by an integer ID.
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub enum KeyVariant {
     /// A string name component for the key path element.
     Name(Cow<'static, str>),
     /// An integer ID component for the key path element.
     Id(i64),
-    /// An incomplete key, meaning it has a Kind but neither an ID nor a Name.
+    /// An incomplete key, meaning it has a kind but neither an ID nor a name.
     Incomplete,
 }
 
 /// A representation of a Google Cloud Datastore Key.
 ///
-/// This structure encapsulates the **Kind** of the entity, its **ID or Name**,
+/// This structure encapsulates the **kind** of the entity, its **ID or name**,
 /// and an optional **parent Key** to establish entity hierarchy.
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct Key {
@@ -26,13 +26,13 @@ pub struct Key {
 }
 
 impl Key {
-    /// Creates a new **incomplete** Key with only the specified Kind.
+    /// Creates a new **incomplete** Key with only the specified kind.
     ///
     /// This key cannot be used to fetch or update an entity but is the base for
     /// creating complete Keys.
     ///
     /// ## Parameters
-    /// - `kind`: The Datastore Kind name (e.g., `"User"`, `"Product"`).
+    /// - `kind`: The Datastore kind name (e.g., `"User"`, `"Product"`).
     pub fn new(kind: impl Into<Cow<'static, str>>) -> Self {
         Key {
             kind: kind.into(),
@@ -41,7 +41,7 @@ impl Key {
         }
     }
 
-    /// Gets a string slice reference to the Kind of the entity represented by this Key.
+    /// Gets a string slice reference to the kind of the entity represented by this Key.
     pub fn kind(&self) -> &str {
         self.kind.as_ref()
     }
@@ -71,7 +71,7 @@ impl Key {
 
     /// Consumes the current Key and returns a new one with the specified **string name**.
     ///
-    /// This replaces any existing ID or Name component.
+    /// This replaces any existing ID or name component.
     pub fn with_name(self, name: impl Into<Cow<'static, str>>) -> Self {
         Key {
             variant: KeyVariant::Name(name.into()),
@@ -81,7 +81,7 @@ impl Key {
 
     /// Consumes the current Key and returns a new one with the specified **integer ID**.
     ///
-    /// This replaces any existing ID or Name component.
+    /// This replaces any existing ID or name component.
     pub fn with_id(self, id: i64) -> Self {
         Key {
             variant: KeyVariant::Id(id),
@@ -129,7 +129,7 @@ impl Key {
     }
 
     /// Recursively traverses the key path (starting from the root parent) and pushes
-    /// the path elements (Kind + ID/Name) into the output vector.
+    /// the path elements (kind + ID/name) into the output vector.
     fn push_path_elements(&self, out: &mut Vec<google_datastore1::api::PathElement>) {
         if let Some(parent) = &self.parent {
             parent.push_path_elements(out);
@@ -494,7 +494,7 @@ impl Entity {
         }
     }
 
-    /// Creates a new Entity with an incomplete Key of the specified Kind.
+    /// Creates a new Entity with an incomplete Key of the specified kind.
     pub fn of_kind(kind: impl Into<Cow<'static, str>>) -> Self {
         Self {
             key: Key::new(kind),
@@ -505,6 +505,11 @@ impl Entity {
     /// Gets a reference to the entity's unique `Key`.
     pub fn key(&self) -> &Key {
         &self.key
+    }
+
+    /// Gets a string slice reference to the kind of this entity.
+    pub fn kind(&self) -> &str {
+        self.key.kind()
     }
 
     /// Returns an iterator over all raw property entries (name and `PropertyValue`).
@@ -565,7 +570,7 @@ impl Entity {
     /// **Empty arrays** (`Value::Array` with zero elements) are internally **converted to `Value::Null`**
     /// before determining indexing and applying the `meaning` logic, aligning with Cloud Datastore's convention
     /// of treating them as effectively null for storage.
-    /// 
+    ///
     /// ## Parameters
     /// - `name`: The property name.
     /// - `value`: The property value.
@@ -584,17 +589,24 @@ impl Entity {
         meaning: Option<i32>,
     ) -> &mut Self {
         let effective_value = match &value {
-            Value::Array(values) => if values.is_empty() {
-                Value::null()
-            } else {
-                value
-            },
-            _ => value
+            Value::Array(values) => {
+                if values.is_empty() {
+                    Value::null()
+                } else {
+                    value
+                }
+            }
+            _ => value,
         };
         let is_null = effective_value.is_null();
         let indexed = if is_null { index_nulls } else { index_values };
         // Null values have no meaning property
-        self.set(name, effective_value, indexed, if is_null { None } else { meaning })
+        self.set(
+            name,
+            effective_value,
+            indexed,
+            if is_null { None } else { meaning },
+        )
     }
 
     /// Checks if a property with the given name is indexed. Returns `false` if the property doesn't exist.

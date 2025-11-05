@@ -348,7 +348,7 @@ impl<'a> ParsedField<'a> {
 fn create_err(text: &str, span: proc_macro2::Span) -> proc_macro2::TokenStream {
     let err_str = syn::LitStr::new(text, span);
     quote! { Err(entail::EntailError {
-        kind: entail::EntailErrorKind::ModelMappingError,
+        kind: entail::EntailErrorKind::PropertyMappingError,
         message: #err_str.into(),
         ..entail::EntailError::default()
     }) }
@@ -364,11 +364,8 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
 
     let name = &input.ident;
     let raw_name = name.to_string();
-    let kind_str = syn::LitStr::new(if let Some(custom_name) = &entail_input.name {
-            custom_name
-        } else {
-            &raw_name
-        }, name.span());
+    let kind = entail_input.name.as_ref().unwrap_or(&raw_name).as_str();
+    let kind_str = syn::LitStr::new(kind, name.span());
     let fields = match &input.data {
         syn::Data::Struct(syn::DataStruct { fields: Fields::Named(fields), .. }) => &fields.named,
         _ => panic!("Entail can only be derived for structs with named fields"),
@@ -606,12 +603,20 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     }).collect();
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
     let adapter_name = format_ident!("_{}_ADAPTER", name.to_string().to_case(Case::Constant));
+    let mismatch_template = quote::ToTokens::to_token_stream(&format!("Expected an Entity with the kind {}, but got {{}}", kind));
     let generated = quote! {
         static #adapter_name: entail::EntityAdapter<#name> = entail::EntityAdapter::new(#kind_str);
 
         impl #impl_generics entail::EntityModel for #name #type_generics #where_clause {
             fn from_ds_entity(e: &entail::ds::Entity) -> Result<Self, entail::EntailError> {
                 let null_value = entail::ds::Value::Null;
+                if e.kind() != #kind_str {
+                    return Err(entail::EntailError {
+                        kind: entail::EntailErrorKind::EntityKindMismatch,
+                        message: format!(#mismatch_template, e.kind()).into(),
+                        ..entail::EntailError::default()
+                    });
+                }
                 Ok(Self {
                     #key_initializer,
                     #(#initializers)*

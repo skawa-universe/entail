@@ -142,7 +142,7 @@ pub trait EntityModel: Sized {
 }
 
 /// Represents the high-level category of error that occurred.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EntailErrorKind {
     /// An error of an indeterminate or unexpected nature.
     Unknown,
@@ -154,9 +154,12 @@ pub enum EntailErrorKind {
     /// The transaction or operation was retried the maximum allowed times, but still did **not succeed**
     /// (e.g., due to repeated contention or conflicts).
     RetriesExhausted,
-    /// An error occurred during the conversion process between a Rust struct and a Datastore entity,
+    /// The **kind** of the entity being deserialized does not match the **kind** expected by the target Rust struct.
+    /// This occurs in `EntityModel::from_ds_entity`.
+    EntityKindMismatch,
+    /// An error occurred during the conversion process between an entity's properties and the Rust struct's fields,
     /// such as a **type mismatch** or a **missing required property**.
-    ModelMappingError,
+    PropertyMappingError,
 }
 
 impl Default for EntailErrorKind {

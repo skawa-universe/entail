@@ -1,4 +1,4 @@
-use entail::{Entail, EntityModel, ds};
+use entail::{Entail, EntailErrorKind, EntityModel, ds};
 use std::collections::HashSet;
 
 #[derive(Entail, Debug, Default)]
@@ -70,7 +70,10 @@ fn code_gen() {
         e.get_value("someField"),
         Some(ds::Value::unicode_string("bar")).as_ref()
     );
-    assert_eq!(e.get_value("key"), Some(ds::Value::integer(118999)).as_ref());
+    assert_eq!(
+        e.get_value("key"),
+        Some(ds::Value::integer(118999)).as_ref()
+    );
     assert_eq!(
         e.get_value("lookup"),
         Some(ds::Value::array(vec![
@@ -84,13 +87,26 @@ fn code_gen() {
         e.get_value("bin"),
         Some(ds::Value::Blob(vec![1, 2, 3].into())).as_ref()
     );
-    assert_eq!(e.get_value("someBool"), Some(ds::Value::boolean(true)).as_ref());
+    assert_eq!(
+        e.get_value("someBool"),
+        Some(ds::Value::boolean(true)).as_ref()
+    );
     assert_eq!(e.get_value("related"), Some(ds::Value::null()).as_ref());
     let raw_entity: google_datastore1::api::Entity = e.clone().into();
-    let null_text_field = raw_entity.properties.as_ref().unwrap().get("optText").unwrap();
+    let null_text_field = raw_entity
+        .properties
+        .as_ref()
+        .unwrap()
+        .get("optText")
+        .unwrap();
     assert_eq!(null_text_field.meaning, None);
     assert_eq!(null_text_field.exclude_from_indexes, Some(false));
-    let present_text_field = raw_entity.properties.as_ref().unwrap().get("presentText").unwrap();
+    let present_text_field = raw_entity
+        .properties
+        .as_ref()
+        .unwrap()
+        .get("presentText")
+        .unwrap();
     assert_eq!(present_text_field.meaning, Some(ds::MEANING_TEXT));
     assert_eq!(present_text_field.exclude_from_indexes, Some(true));
     let related_key = ds::Key::new("Bizz").with_name("buzz");
@@ -116,6 +132,8 @@ fn code_gen_minimal_model() {
     assert_eq!(&ds::Key::new("MM").with_name("wibz"), e.key());
     let field = e.get("textField").unwrap();
     assert_eq!(field.meaning().unwrap(), ds::MEANING_TEXT);
-    let field = e.get("opt").unwrap();
-    assert_eq!(field.meaning(), None);
+    let different_kind = ds::Entity::new(ds::Key::new("NotMM").with_id(1));
+    let result = MinimalModel::from_ds_entity(&different_kind).expect_err("Expected an error");
+    assert_eq!(result.kind, EntailErrorKind::EntityKindMismatch);
+    println!("Expected error message: {}", result.message);
 }
