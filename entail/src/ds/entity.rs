@@ -560,9 +560,21 @@ impl Entity {
         self.set(name, value, true, None)
     }
 
-    /// Sets a property to be **indexed** only if its `value` is not `Value::Null`.
+    /// Sets a property with advanced control over indexing based on the value's null status.
     ///
-    /// This is useful for implementing various value-dependent indexing behaviors.
+    /// **Empty arrays** (`Value::Array` with zero elements) are internally **converted to `Value::Null`**
+    /// before determining indexing and applying the `meaning` logic, aligning with Cloud Datastore's convention
+    /// of treating them as effectively null for storage.
+    /// 
+    /// ## Parameters
+    /// - `name`: The property name.
+    /// - `value`: The property value.
+    /// - `index_values`: If the effective value is **non-null**, this flag determines whether
+    ///   it is indexed.
+    /// - `index_nulls`: If the effective value **is** null (or an empty array), this flag
+    ///   determines whether it is indexed.
+    /// - `meaning`: An optional integer hint (`i32`) for the Datastore API. **Note: This is
+    ///   ignored if the effective value is null.**
     pub fn set_advanced(
         &mut self,
         name: impl Into<Cow<'static, str>>,
