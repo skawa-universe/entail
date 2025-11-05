@@ -130,6 +130,23 @@ impl Filter {
     }
 }
 
+impl FilterOperator {
+    /// Creates a new `Filter::Property` variant using this operator.
+    ///
+    /// This is a convenience method for constructing a filter that compares a
+    /// specific property against a given value.
+    ///
+    /// ## Parameters
+    /// - `property_name`: The name of the property to filter on.
+    /// - `value`: The value to compare the property against.
+    ///
+    /// ## Returns
+    /// A completed [`Filter::Property`] ready to be used in a query.
+    pub fn of(self, property_name: impl Into<Cow<'static, str>>, value: Value) -> Filter {
+        Filter::Property(property_name.into(), self, value)
+    }
+}
+
 /// The logical operator used to combine sub-filters in a `Composite` filter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Display, EnumString)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
