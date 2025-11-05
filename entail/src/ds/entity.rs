@@ -332,6 +332,77 @@ impl Value {
     }
 }
 
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Self::unicode_string(value)
+    }
+}
+
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::boolean(value)
+    }
+}
+
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Self::integer(value as i64)
+    }
+}
+
+impl From<u32> for Value {
+    fn from(value: u32) -> Self {
+        Self::integer(value as i64)
+    }
+}
+
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        Self::integer(value)
+    }
+}
+
+impl From<&'static str> for Value {
+    fn from(value: &'static str) -> Self {
+        Self::unicode_string(Cow::Borrowed(value))
+    }
+}
+
+impl From<Cow<'static, str>> for Value {
+    fn from(value: Cow<'static, str>) -> Self {
+        Self::unicode_string(value)
+    }
+}
+
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        Self::floating_point(value)
+    }
+}
+
+impl From<f32> for Value {
+    fn from(value: f32) -> Self {
+        Self::floating_point(value as f64)
+    }
+}
+
+impl From<Vec<u8>> for Value {
+    fn from(value: Vec<u8>) -> Self {
+        Self::blob(value)
+    }
+}
+
+impl From<Vec<Value>> for Value {
+    fn from(value: Vec<Value>) -> Self {
+        Self::array(value)
+    }
+}
+
+impl From<Key> for Value {
+    fn from(value: Key) -> Self {
+        Self::key(value)
+    }
+}
 impl From<google_datastore1::api::Value> for Value {
     /// Converts the lower-level API `Value` into the higher-level `entail::Value`.
     fn from(value: google_datastore1::api::Value) -> Self {

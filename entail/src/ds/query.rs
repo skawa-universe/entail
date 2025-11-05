@@ -58,10 +58,7 @@ where
         F: FnMut(&'a T) -> U,
     {
         // 1. Iterate over references to the items.
-        let transformed_items = self.items
-            .iter()
-            .map(|item_ref| f(item_ref))
-            .collect();
+        let transformed_items = self.items.iter().map(|item_ref| f(item_ref)).collect();
 
         // 2. Clone the end_cursor since the original is kept.
         QueryResult {
@@ -134,16 +131,24 @@ impl FilterOperator {
     /// Creates a new `Filter::Property` variant using this operator.
     ///
     /// This is a convenience method for constructing a filter that compares a
-    /// specific property against a given value.
+    /// specific property against a given value. It accepts anything that can be
+    /// converted into a property name (`Cow<'static, str>`) and a value (`Value`).
     ///
     /// ## Parameters
-    /// - `property_name`: The name of the property to filter on.
-    /// - `value`: The value to compare the property against.
+    /// - `property_name`: The name of the property to filter on (e.g., `String`,
+    ///   `&'static str`).
+    /// - `value`: The value to compare the property against. This can be a
+    ///   primitive type that automatically converts into a `Value` (like an `i64`
+    ///   or `String`), or a pre-constructed `Value` itself.
     ///
     /// ## Returns
     /// A completed [`Filter::Property`] ready to be used in a query.
-    pub fn of(self, property_name: impl Into<Cow<'static, str>>, value: Value) -> Filter {
-        Filter::Property(property_name.into(), self, value)
+    pub fn of(
+        self,
+        property_name: impl Into<Cow<'static, str>>,
+        value: impl Into<Value>,
+    ) -> Filter {
+        Filter::Property(property_name.into(), self, value.into())
     }
 }
 
@@ -186,12 +191,12 @@ impl Into<google_datastore1::api::Filter> for Filter {
                 property_filter: Some(google_datastore1::api::PropertyFilter {
                     op: Some(op.to_string()),
                     property: Some(google_datastore1::api::PropertyReference {
-                        name: Some(name.into_owned())
+                        name: Some(name.into_owned()),
                     }),
                     value: Some(value.into()),
                 }),
                 ..Default::default()
-            }
+            },
         }
     }
 }
@@ -225,14 +230,19 @@ impl PropertyOrder {
     /// - `name`: The name of the property to order by.
     /// - `direction`: The direction of the sort.
     pub fn new(name: impl Into<Cow<'static, str>>, direction: OrderDirection) -> Self {
-        Self { name: name.into(), direction }
+        Self {
+            name: name.into(),
+            direction,
+        }
     }
 }
 
 impl Into<google_datastore1::api::PropertyOrder> for PropertyOrder {
     fn into(self) -> google_datastore1::api::PropertyOrder {
         google_datastore1::api::PropertyOrder {
-            property: Some(google_datastore1::api::PropertyReference { name: Some(self.name.into_owned()) }),
+            property: Some(google_datastore1::api::PropertyReference {
+                name: Some(self.name.into_owned()),
+            }),
             direction: Some(self.direction.to_string()),
             ..Default::default()
         }
@@ -318,22 +328,34 @@ impl Into<google_datastore1::api::Query> for Query {
     fn into(self) -> google_datastore1::api::Query {
         google_datastore1::api::Query {
             kind: if self.kind.is_empty() {
-                    Some(Vec::new())
-                } else {
-                    let kind = google_datastore1::api::KindExpression {
-                        name: Some(self.kind.into_owned())
-                    };
-                    Some(vec![kind])
-                },
+                Some(Vec::new())
+            } else {
+                let kind = google_datastore1::api::KindExpression {
+                    name: Some(self.kind.into_owned()),
+                };
+                Some(vec![kind])
+            },
             filter: self.filter.map(Filter::into),
             start_cursor: self.start_cursor,
             end_cursor: self.end_cursor,
-            projection: Some(self.projection.into_iter().map(|name| google_datastore1::api::Projection {
-                property: Some(google_datastore1::api::PropertyReference { name: Some(name.into_owned() )}),
-            }).collect()),
-            distinct_on: Some(self.distinct_on.into_iter().map(|name| google_datastore1::api::PropertyReference {
-                name: Some(name.into_owned()),
-            }).collect()),
+            projection: Some(
+                self.projection
+                    .into_iter()
+                    .map(|name| google_datastore1::api::Projection {
+                        property: Some(google_datastore1::api::PropertyReference {
+                            name: Some(name.into_owned()),
+                        }),
+                    })
+                    .collect(),
+            ),
+            distinct_on: Some(
+                self.distinct_on
+                    .into_iter()
+                    .map(|name| google_datastore1::api::PropertyReference {
+                        name: Some(name.into_owned()),
+                    })
+                    .collect(),
+            ),
             order: Some(self.order.into_iter().map(PropertyOrder::into).collect()),
             limit: Some(self.limit),
             offset: Some(self.offset),
