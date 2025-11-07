@@ -22,6 +22,10 @@ struct Model {
     opt_text: Option<String>,
     #[entail(text)]
     present_text: String,
+    #[entail]
+    nullable_blob: Option<Vec<u8>>,
+    #[entail]
+    opt_blob: Option<Vec<u8>>,
     unrelated: Option<HashSet<String>>,
 }
 
@@ -58,6 +62,8 @@ fn code_gen() {
         unrelated: Some(HashSet::new()),
         some_bool: true,
         present_text: "present text".into(),
+        nullable_blob: None,
+        opt_blob: Some(vec![4, 5, 6, 7]),
         ..Model::default()
     };
     let mut e = model.to_ds_entity().unwrap();
@@ -85,8 +91,12 @@ fn code_gen() {
     );
     assert_eq!(
         e.get_value("bin"),
-        Some(ds::Value::Blob(vec![1, 2, 3].into())).as_ref()
+        Some(ds::Value::blob(vec![1, 2, 3])).as_ref()
     );
+    assert!(e.is_indexed("nullableBlob"));
+    assert_eq!(e.get_value("nullableBlob"), Some(ds::Value::Null).as_ref());
+    assert!(e.is_indexed("optBlob"));
+    assert_eq!(e.get_value("optBlob"), Some(ds::Value::blob(vec![4, 5, 6, 7])).as_ref());
     assert_eq!(
         e.get_value("someBool"),
         Some(ds::Value::boolean(true)).as_ref()
@@ -119,6 +129,8 @@ fn code_gen() {
     assert!(new_model.some_bool);
     assert_eq!(new_model.related.as_ref(), Some(&related_key));
     assert!(new_model.unrelated.is_none());
+    assert_eq!(new_model.nullable_blob, None);
+    assert_eq!(new_model.opt_blob, Some(vec![4, 5, 6, 7]));
     println!("{:?}", new_model);
 }
 

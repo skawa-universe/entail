@@ -212,6 +212,20 @@ fn is_vec_type(path: &syn::Path) -> bool {
     false
 }
 
+fn get_inner_type<'a>(type_path: &'a syn::Path) -> Option<&'a syn::Path> {
+    let last_segment = &type_path.segments.last().unwrap();
+    if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
+        let ty = &args.args.first().unwrap();
+        if let syn::GenericArgument::Type(syn::Type::Path(embedded_ty)) = ty {
+            Some(&embedded_ty.path)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 fn is_integer_type(path: &syn::Path) -> bool {
     path.is_ident("i32") || path.is_ident("u32") || path.is_ident("i64")
 }
@@ -312,22 +326,24 @@ impl<'a> ParsedField<'a> {
 
     fn is_nullable(&self) -> bool { is_option_type(&self.ty_path) }
 
-    fn is_array(&self) -> bool { is_vec_type(&self.ty_path) }
+    fn is_array(&self) -> bool {
+        is_vec_type(&self.ty_path) ||
+            get_inner_type(self.ty_path)
+                .map(is_vec_type).unwrap_or(false)
+    }
 
     fn type_path(&self) -> &'a syn::Path {
         if !self.is_nullable() && !self.is_array() {
             &self.ty_path
         } else {
             let last_segment = &self.ty_path.segments.last().unwrap();
-            if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
-                let ty = &args.args.first().unwrap();
-                if let syn::GenericArgument::Type(syn::Type::Path(embedded_ty)) = ty {
-                    &embedded_ty.path
-                } else {
-                    panic!("Unrecognized argument in {:?}", &last_segment.span())
-                }
+            match get_inner_type(self.ty_path).and_then(|e| if self.is_nullable() && self.is_array() {
+                get_inner_type(e)
             } else {
-                panic!("Unrecognized argument in {:?}", &last_segment.span())
+                Some(e)
+            }) {
+                Some(path) => path,
+                None => panic!("Unrecognized argument in {:?}", &last_segment.span()),
             }
         }
     }
@@ -575,7 +591,6 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                     }
             }
             let initializer = 
-                // blob is not implemented yet
                 if f.is_array() && path.is_ident("u8") {
                     gen_initializer!(Blob, (val.clone()))
                 } else if is_string_type(path) {
@@ -591,7 +606,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 } else if is_key_type(path) {
                     gen_initializer!(Key, (val.clone()))
                 } else {
-                    panic!("Unexpected type: {:?} {:?}", path, f.is_array());
+                    panic!("Unexpected type: {:?} array({}) nullable({})", path, f.is_array(), f.is_nullable());
                 };
 
             Some(quote! { #name: #initializer, })
