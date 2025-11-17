@@ -44,6 +44,35 @@ impl<T> QueryResult<T> {
             end_cursor, // The cursor is simply moved/copied.
         }
     }
+
+    /// Consumes the `QueryResult<T>` and attempts to transform its items into
+    /// a `QueryResult<U>` using the provided fallible closure.
+    ///
+    /// If the closure returns an `Err(E)` for any item, the transformation
+    /// stops, and that error is returned immediately.
+    pub fn try_map<U, E, F>(self, mut f: F) -> Result<QueryResult<U>, E>
+    where
+        F: FnMut(T) -> Result<U, E>,
+    {
+        // 1. Destructure the original QueryResult.
+        let QueryResult { items, end_cursor } = self;
+        // 2. Pre-allocate the new items vector with the exact capacity
+        //    of the original vector to minimize reallocations.
+        let mut transformed_items = Vec::with_capacity(items.len());
+
+        // 3. Iterate over the consumed items and apply the fallible closure.
+        //    The `?` operator (try operator) handles the error: if `f(item)`
+        //    returns `Err(E)`, the function immediately returns `Err(E)`.
+        for item in items.into_iter() {
+            transformed_items.push(f(item)?);
+        }
+
+        // 4. Construct and return the result
+        Ok(QueryResult {
+            items: transformed_items,
+            end_cursor, // The cursor is simply moved/copied.
+        })
+    }
 }
 
 impl<'a, T> QueryResult<T>
@@ -65,6 +94,33 @@ where
             items: transformed_items,
             end_cursor: self.end_cursor.clone(),
         }
+    }
+
+    /// Attempts to transform a reference to the `QueryResult<T>` into a
+    /// `QueryResult<U>` using the provided fallible closure.
+    ///
+    /// If the closure returns an `Err(E)` for any item, the transformation
+    /// stops, and that error is returned immediately.
+    pub fn try_map_ref<U, E, F>(&'a self, mut f: F) -> Result<QueryResult<U>, E>
+    where
+        F: FnMut(&'a T) -> Result<U, E>,
+    {
+        // 1. Pre-allocate the new items vector with the exact capacity
+        //    of the original vector to minimize reallocations.
+        let mut transformed_items = Vec::with_capacity(self.items.len());
+
+        // 2. Iterate over references to the items and apply the fallible closure.
+        //    The `?` operator ensures a fail-fast return if any transformation fails.
+        for item_ref in self.items.iter() {
+            transformed_items.push(f(item_ref)?);
+        }
+
+        // 3. If all transformations succeeded, construct and return the new QueryResult<U>.
+        //    The end_cursor is cloned because the original `self` is only borrowed.
+        Ok(QueryResult {
+            items: transformed_items,
+            end_cursor: self.end_cursor.clone(),
+        })
     }
 }
 

@@ -36,6 +36,21 @@ where
         }
     }
 
+    /// Converts a Datastore entity into the target Rust struct `T` by consuming the entity.
+    ///
+    /// This acts as a consuming wrapper around the core [`EntityModel::from_ds_entity`]
+    /// logic.
+    ///
+    /// ## Parameters
+    /// - `entity`: The Datastore entity to consume and convert.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing the populated struct instance `T` or an [`EntailError`]
+    /// if the conversion fails (e.g., due to mapping issues).
+    pub fn consume_entity(entity: ds::Entity) -> Result<T, EntailError> {
+        T::from_ds_entity(&entity)
+    }
+
     /// Creates a new Datastore **Key** for the entity with a **string name**
     /// component.
     ///
@@ -121,5 +136,27 @@ where
                 ))
             })
             .and_then(|e| T::from_ds_entity(&e))
+    }
+
+    /// Executes a Datastore query and automatically maps all resulting entities to the struct `T`.
+    ///
+    /// This function performs the query execution and then uses the `consume_entity`
+    /// function to map every fetched entity to the model type `T`.
+    ///
+    /// ## Parameters
+    /// - `ds`: A reference to the Datastore client shell.
+    /// - `query`: The complete [`ds::Query`] definition to execute.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing a [`ds::QueryResult`] where the entities are instances of `T`,
+    /// or an [`EntailError`] if the query fails or any entity mapping fails.
+    pub async fn fetch_query(
+        &self,
+        ds: &ds::DatastoreShell,
+        query: ds::Query,
+    ) -> Result<ds::QueryResult<T>, EntailError> {
+        ds.run_query(query)
+            .await
+            .and_then(|query_result| query_result.try_map(Self::consume_entity))
     }
 }
