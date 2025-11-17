@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
+use std::collections::HashMap;
 
 use crate::ds;
 use crate::{EntailError, EntityModel};
@@ -136,6 +137,22 @@ where
                 ))
             })
             .and_then(|e| T::from_ds_entity(&e))
+    }
+
+    pub async fn fetch_all(
+        &self,
+        ds: &ds::DatastoreShell,
+        keys: &[ds::Key],
+    ) -> Result<HashMap<ds::Key, T>, EntailError> {
+        let result = ds.get_all(keys)
+            .await?;
+        let mut map = HashMap::with_capacity(result.len());
+        for entity in result.into_iter() {
+            let model = T::from_ds_entity(&entity)?;
+            let key = entity.just_key();
+            map.insert(key, model);
+        }
+        Ok(map)
     }
 
     /// Executes a Datastore query and automatically maps all resulting entities to the struct `T`.

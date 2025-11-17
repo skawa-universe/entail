@@ -578,6 +578,11 @@ impl Entity {
         &self.key
     }
 
+    /// Consumes the entity and returns just the key.
+    pub fn just_key(self) -> Key {
+        self.key
+    }
+
     /// Gets a string slice reference to the kind of this entity.
     pub fn kind(&self) -> &str {
         self.key.kind()
