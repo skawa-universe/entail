@@ -163,8 +163,11 @@ impl DatastoreShell {
     /// The order of the entities in the returned vector is not guaranteed to match
     /// the order of the keys in the input slice. If an entity is not found,
     /// it's omitted from the vector.
-    pub async fn get_all(&self, keys: &[ds::Key]) -> Result<Vec<ds::Entity>, EntailError> {
-        let mut native_keys = keys.iter().map(|key| key.to_api()).collect();
+    pub async fn get_all(
+        &self,
+        keys: impl AsRef<[ds::Key]>,
+    ) -> Result<Vec<ds::Entity>, EntailError> {
+        let mut native_keys = keys.as_ref().iter().map(ds::Key::to_api).collect();
         loop {
             let lookup = LookupRequest {
                 database_id: self.database_id.clone(),
@@ -350,12 +353,28 @@ impl DatastoreShell {
         }
     }
 
+    /// Allocates unique numeric IDs for a batch of incomplete Keys.
+    ///
+    /// This is useful for obtaining IDs for new entities before performing the actual insert
+    /// or for creating a complete key path that can be referenced by other entities.
+    ///
+    /// ## Parameters
+    /// - `incomplete_keys`: A list of Keys for which to allocate IDs. Each Key **must** be
+    ///   incomplete (i.e., lacking an ID or name component) and must not be reserved/read-only.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing a `Vec` of **complete** [`ds::Key`]s, where each element
+    /// corresponds to the input Key but now includes a newly allocated ID.
+    /// The result is wrapped in an [`EntailError`] if the underlying API call fails.
     pub async fn allocate_ids(
         &self,
-        incomplete_keys: &[ds::Key],
+        incomplete_keys: impl AsRef<[ds::Key]>,
     ) -> Result<Vec<ds::Key>, EntailError> {
-        let keys: Vec<google_datastore1::api::Key> =
-            incomplete_keys.iter().map(ds::Key::to_api).collect();
+        let keys: Vec<google_datastore1::api::Key> = incomplete_keys
+            .as_ref()
+            .iter()
+            .map(ds::Key::to_api)
+            .collect();
         let request = AllocateIdsRequest {
             database_id: self.database_id.clone(),
             keys: Some(keys),
@@ -377,8 +396,22 @@ impl DatastoreShell {
         }
     }
 
-    pub async fn reserve_ids(&self, id_keys: &[ds::Key]) -> Result<(), EntailError> {
-        let keys: Vec<google_datastore1::api::Key> = id_keys.iter().map(ds::Key::to_api).collect();
+    /// Reserves a batch of Keys with numeric IDs, preventing them from being
+    /// automatically allocated by Cloud Datastore.
+    ///
+    /// This is typically used to ensure that a set of known, numeric IDs remains available
+    /// for manual insertion.
+    ///
+    /// ## Parameters
+    /// - `id_keys`: A list of Keys that must have **complete key paths** with **numeric IDs**
+    ///   (the `id` component must be set) to be reserved.
+    ///
+    /// ## Returns
+    /// A [`Result`] that is `Ok(())` on success, or an [`EntailError`] if the underlying
+    /// API call fails (e.g., if one of the Keys is invalid or the reservation fails).
+    pub async fn reserve_ids(&self, id_keys: impl AsRef<[ds::Key]>) -> Result<(), EntailError> {
+        let keys: Vec<google_datastore1::api::Key> =
+            id_keys.as_ref().iter().map(ds::Key::to_api).collect();
         let request = ReserveIdsRequest {
             database_id: self.database_id.clone(),
             keys: Some(keys),

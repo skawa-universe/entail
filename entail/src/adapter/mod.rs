@@ -1,6 +1,6 @@
-use std::borrow::Cow;
-use std::marker::PhantomData;
+use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
 use crate::ds;
 use crate::{EntailError, EntityModel};
@@ -139,13 +139,27 @@ where
             .and_then(|e| T::from_ds_entity(&e))
     }
 
+    /// Fetches a batch of entities from Datastore using the provided `keys` and
+    /// automatically maps the results to instances of the Rust struct `T`.
+    ///
+    /// The result is returned as a `HashMap` where the **complete Key** is mapped to the
+    /// successfully deserialized struct `T`. Entities that are **not found** in Datastore
+    /// are simply omitted from the resulting map.
+    ///
+    /// ## Parameters
+    /// - `ds`: A reference to the Datastore client shell.
+    /// - `keys`: A list of complete [`ds::Key`]s to fetch.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing a `HashMap<ds::Key, T>` on success, or an [`EntailError`]
+    /// if the batch fetch fails or if any *found* entity fails the deserialization
+    /// process via [`EntityModel::from_ds_entity`].
     pub async fn fetch_all(
         &self,
         ds: &ds::DatastoreShell,
-        keys: &[ds::Key],
+        keys: impl AsRef<[ds::Key]>,
     ) -> Result<HashMap<ds::Key, T>, EntailError> {
-        let result = ds.get_all(keys)
-            .await?;
+        let result = ds.get_all(keys).await?;
         let mut map = HashMap::with_capacity(result.len());
         for entity in result.into_iter() {
             let model = T::from_ds_entity(&entity)?;
