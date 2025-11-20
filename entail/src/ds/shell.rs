@@ -12,6 +12,7 @@ use google_datastore1::{Datastore, common::NoToken};
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use hyper_util::rt::TokioExecutor;
+use std::borrow::Borrow;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -156,18 +157,26 @@ impl DatastoreShell {
     /// This method is more efficient than fetching entities one by one.
     ///
     /// ## Parameters
-    /// - `keys`: A slice of `Key`s to retrieve.
+    /// - `keys`: A collection of complete `Key`s to retrieve. This parameter is highly
+    ///   flexible:
+    ///   * You can pass a **container of keys** (e.g., `Vec<Key>`) to consume the container and all
+    ///     keys within it.
+    ///   * You can pass an **address of a container** (e.g., `&[Key]`) to keep the container and
+    ///     the keys.
+    ///   * You can pass a **container of key references** (e.g., `Vec<&Key>`) where the container
+    ///     itself is consumed, but the referenced key objects are retained by the caller.
     ///
     /// ## Returns
     /// A `Result` containing a `Vec<Entity>` corresponding to the input keys.
     /// The order of the entities in the returned vector is not guaranteed to match
     /// the order of the keys in the input slice. If an entity is not found,
     /// it's omitted from the vector.
-    pub async fn get_all(
-        &self,
-        keys: impl AsRef<[ds::Key]>,
-    ) -> Result<Vec<ds::Entity>, EntailError> {
-        let mut native_keys = keys.as_ref().iter().map(ds::Key::to_api).collect();
+    pub async fn get_all<I>(&self, keys: I) -> Result<Vec<ds::Entity>, EntailError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ds::Key>,
+    {
+        let mut native_keys = keys.into_iter().map(|key| key.borrow().to_api()).collect();
         loop {
             let lookup = LookupRequest {
                 database_id: self.database_id.clone(),
@@ -359,21 +368,28 @@ impl DatastoreShell {
     /// or for creating a complete key path that can be referenced by other entities.
     ///
     /// ## Parameters
-    /// - `incomplete_keys`: A list of Keys for which to allocate IDs. Each Key **must** be
+    /// - `incomplete_keys`: A collection of `Key`s for which to allocate IDs. Each `Key` **must** be
     ///   incomplete (i.e., lacking an ID or name component) and must not be reserved/read-only.
+    ///   This parameter is highly flexible:
+    ///   * You can pass a **container of keys** (e.g., `Vec<Key>`) to consume the container and all
+    ///     keys within it.
+    ///   * You can pass an **address of a container** (e.g., `&[Key]`) to keep the container and
+    ///     the keys.
+    ///   * You can pass a **container of key references** (e.g., `Vec<&Key>`) where the container
+    ///     itself is consumed, but the referenced key objects are retained by the caller.
     ///
     /// ## Returns
     /// A [`Result`] containing a `Vec` of **complete** [`ds::Key`]s, where each element
     /// corresponds to the input Key but now includes a newly allocated ID.
     /// The result is wrapped in an [`EntailError`] if the underlying API call fails.
-    pub async fn allocate_ids(
-        &self,
-        incomplete_keys: impl AsRef<[ds::Key]>,
-    ) -> Result<Vec<ds::Key>, EntailError> {
+    pub async fn allocate_ids<I>(&self, incomplete_keys: I) -> Result<Vec<ds::Key>, EntailError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ds::Key>,
+    {
         let keys: Vec<google_datastore1::api::Key> = incomplete_keys
-            .as_ref()
-            .iter()
-            .map(ds::Key::to_api)
+            .into_iter()
+            .map(|key| key.borrow().to_api())
             .collect();
         let request = AllocateIdsRequest {
             database_id: self.database_id.clone(),
@@ -403,15 +419,28 @@ impl DatastoreShell {
     /// for manual insertion.
     ///
     /// ## Parameters
-    /// - `id_keys`: A list of Keys that must have **complete key paths** with **numeric IDs**
+    /// - `id_keys`: A collection of `Key`s that must have **complete key paths** with **numeric IDs**
     ///   (the `id` component must be set) to be reserved.
+    ///   This parameter is highly flexible:
+    ///   * You can pass a **container of keys** (e.g., `Vec<Key>`) to consume the container and all
+    ///     keys within it.
+    ///   * You can pass an **address of a container** (e.g., `&[Key]`) to keep the container and
+    ///     the keys.
+    ///   * You can pass a **container of key references** (e.g., `Vec<&Key>`) where the container
+    ///     itself is consumed, but the referenced key objects are retained by the caller.
     ///
     /// ## Returns
     /// A [`Result`] that is `Ok(())` on success, or an [`EntailError`] if the underlying
     /// API call fails (e.g., if one of the Keys is invalid or the reservation fails).
-    pub async fn reserve_ids(&self, id_keys: impl AsRef<[ds::Key]>) -> Result<(), EntailError> {
-        let keys: Vec<google_datastore1::api::Key> =
-            id_keys.as_ref().iter().map(ds::Key::to_api).collect();
+    pub async fn reserve_ids<I>(&self, id_keys: I) -> Result<(), EntailError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ds::Key>,
+    {
+        let keys: Vec<google_datastore1::api::Key> = id_keys
+            .into_iter()
+            .map(|key| key.borrow().to_api())
+            .collect();
         let request = ReserveIdsRequest {
             database_id: self.database_id.clone(),
             keys: Some(keys),

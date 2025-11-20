@@ -1,7 +1,7 @@
 mod common;
 
 use common::init_ring;
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use entail::{
     Entail, EntailError, EntityModel,
@@ -121,5 +121,19 @@ pub async fn test_adapter() -> Result<(), EntailError> {
     // the error is forwarded from get_single, because this is a bad request
     let incomplete = a.fetch_single(&ds, a.create_key()).await;
     assert!(incomplete.is_err());
+    let key1 = a.create_named_key("does_not_exist");
+    let key2 = a.create_named_key("test");
+    let exotic: HashSet<&Key> = [&key1, &key2].into();
+    let map = a.fetch_all(&ds, exotic).await?;
+    assert_eq!(map.len(), 1);
+    assert!(map.get(&key1).is_none());
+    assert_eq!(map.get(&key2).unwrap().value, rs.value);
+
+    let simple: Vec<Key> = vec![key1.clone(), key2.clone()];
+    let map = a.fetch_all(&ds, &simple).await?;
+    assert_eq!(map.len(), 1);
+    assert_eq!(simple.len(), 2);
+    assert!(map.get(&key1).is_none());
+    assert_eq!(map.get(&key2).unwrap().value, rs.value);
     Ok(())
 }

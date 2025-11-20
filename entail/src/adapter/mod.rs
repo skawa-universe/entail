@@ -148,17 +148,27 @@ where
     ///
     /// ## Parameters
     /// - `ds`: A reference to the Datastore client shell.
-    /// - `keys`: A list of complete [`ds::Key`]s to fetch.
+    /// - `keys`: A collection of complete [`ds::Key`]s to fetch. This parameter is highly flexible:
+    ///   * You can pass a **container of keys** (e.g., `Vec<Key>`) to consume the container and all
+    ///     keys within it.
+    ///   * You can pass an **address of a container** (e.g., `&[Key]`) to keep the container and
+    ///     the keys.
+    ///   * You can pass a **container of key references** (e.g., `Vec<&Key>`) where the container
+    ///     itself is consumed, but the referenced key objects are retained by the caller.
     ///
     /// ## Returns
     /// A [`Result`] containing a `HashMap<ds::Key, T>` on success, or an [`EntailError`]
     /// if the batch fetch fails or if any *found* entity fails the deserialization
     /// process via [`EntityModel::from_ds_entity`].
-    pub async fn fetch_all(
+    pub async fn fetch_all<I>(
         &self,
         ds: &ds::DatastoreShell,
-        keys: impl AsRef<[ds::Key]>,
-    ) -> Result<HashMap<ds::Key, T>, EntailError> {
+        keys: I,
+    ) -> Result<HashMap<ds::Key, T>, EntailError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ds::Key>,
+    {
         let result = ds.get_all(keys).await?;
         let mut map = HashMap::with_capacity(result.len());
         for entity in result.into_iter() {
