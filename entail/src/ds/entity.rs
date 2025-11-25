@@ -710,6 +710,16 @@ impl Entity {
     pub fn get(&self, name: &str) -> Option<&PropertyValue> {
         self.properties.get(name)
     }
+
+    /// Removes a property by name returning the raw property value if the entity previously had the property.
+    pub fn remove_value(&mut self, name: &str) -> Option<Value> {
+        self.properties.remove(name).map(|ev| ev.value)
+    }
+
+    /// Removes a property by name returning the raw property value if the entity previously had the property.
+    pub fn remove(&mut self, name: &str) -> Option<PropertyValue> {
+        self.properties.remove(name)
+    }
 }
 
 impl fmt::Display for Entity {
