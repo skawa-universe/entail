@@ -543,6 +543,13 @@ impl PropertyValue {
     }
 }
 
+impl Into<Value> for PropertyValue {
+    /// Keeps the value, drops everything else
+    fn into(self) -> Value {
+        self.value
+    }
+}
+
 impl fmt::Display for PropertyValue {
     /// Formats the property value, including its indexing status.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -579,6 +586,10 @@ impl Entity {
             key: Key::new(kind),
             properties: HashMap::new(),
         }
+    }
+
+    pub fn key_and_values(self) -> (Key, HashMap<Cow<'static, str>, PropertyValue>) {
+        (self.key, self.properties)
     }
 
     /// Gets a reference to the entity's unique `Key`.
