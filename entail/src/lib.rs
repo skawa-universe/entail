@@ -146,6 +146,12 @@ pub trait EntityModel: Sized {
 pub enum EntailErrorKind {
     /// An error of an indeterminate or unexpected nature.
     Unknown,
+    /// An error originating from the application or client code layer that utilizes `entail`.
+    /// This is used to wrap and propagate higher-level, known errors within the
+    /// standard [`EntailError`] structure.
+    ///
+    /// **Note**: The `entail` library itself will **never** generate an error of this kind.
+    ApplicationError,
     /// The operation required an entity to exist in the Datastore (e.g., `fetch_single`), but it was **not found**.
     RequiredEntityNotFound,
     /// The underlying **Cloud Datastore API call** failed. This kind of error often
@@ -198,6 +204,17 @@ impl EntailError {
             message: message.into(),
             ds_error: None,
         }
+    }
+
+    /// Creates a new `EntailError` with the kind set to [`EntailErrorKind::ApplicationError`].
+    ///
+    /// This is a convenience wrapper for wrapping an error message from the client application
+    /// layer. The library itself would never call this function to report its own errors.
+    ///
+    /// ## Parameters
+    /// - `message`: A human-readable message describing the application error.
+    pub fn app(message: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self::simple(EntailErrorKind::ApplicationError, message)
     }
 }
 
