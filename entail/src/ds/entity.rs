@@ -117,6 +117,14 @@ impl Key {
         }
     }
 
+    /// Convenience method to consume the key and keep the name (if there's any)
+    pub fn into_name(self) -> Option<Cow<'static, str>> {
+        match self.variant {
+            KeyVariant::Name(name) => Some(name),
+            _ => None,
+        }
+    }
+
     /// Converts this `entail::ds::Key` reference into the lower-level
     /// `google_datastore1::api::Key` representation.
     pub fn to_api(&self) -> google_datastore1::api::Key {
