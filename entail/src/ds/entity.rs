@@ -64,6 +64,20 @@ impl Key {
         }
     }
 
+    /// Returns whether the key is **complete**.
+    ///
+    /// A key is considered complete if its last path element has
+    /// either an **ID** or a **Name** component.
+    ///
+    /// ## Returns
+    /// `true` if the key is complete (i.e., `name()` or `id()`
+    /// would return `Some(...)`).
+    /// Returns `false` if the key is **incomplete** (i.e., the
+    /// variant is [`KeyVariant::Incomplete`]).
+    pub fn is_complete(&self) -> bool {
+        self.variant != KeyVariant::Incomplete
+    }
+
     /// Gets a reference to the parent Key, if this Key is part of a key path.
     pub fn parent(&self) -> Option<&Key> {
         self.parent.as_deref()

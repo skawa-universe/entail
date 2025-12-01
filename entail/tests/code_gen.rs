@@ -47,6 +47,13 @@ impl Default for MinimalModel {
     }
 }
 
+#[derive(Entail, Debug, Default)]
+#[entail]
+struct AutoId {
+    #[entail]
+    key: Option<i64>,
+}
+
 #[test]
 fn code_gen() {
     let model = Model {
@@ -148,4 +155,18 @@ fn code_gen_minimal_model() {
     let result = MinimalModel::from_ds_entity(&different_kind).expect_err("Expected an error");
     assert_eq!(result.kind, EntailErrorKind::EntityKindMismatch);
     println!("Expected error message: {}", result.message);
+}
+
+#[test]
+fn code_gen_auto_id() {
+    let auto_id = AutoId::default();
+    let mut e = auto_id.to_ds_entity().unwrap();
+    let key = e.key();
+    assert_eq!(e.kind(), "AutoId");
+    assert!(!key.is_complete());
+    let id: i64 = 1189998899991197253;
+    e.set_key(key.clone().with_id(id));
+    let auto_with_id = AutoId::from_ds_entity(&e).unwrap();
+    assert!(auto_with_id.key.is_some());
+    assert_eq!(auto_with_id.key.unwrap(), id);
 }

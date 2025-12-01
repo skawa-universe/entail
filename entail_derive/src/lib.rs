@@ -408,7 +408,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     }
 
     let key_field_name: &Ident = key_field.name;
-    let entity_key_new: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.ty_path) || is_string_type(key_field.ty_path) {
+    let entity_key_new: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.type_path()) || is_string_type(key_field.type_path()) {
         if key_field.is_nullable() {
             quote! {
                 match &self.#key_field_name {
@@ -421,12 +421,12 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 entail::ds::Key::new(#kind_str).with_name(self.#key_field_name.clone())
             }
         }
-    } else if key_field.ty_path.is_ident("i64") {
+    } else if key_field.type_path().is_ident("i64") {
         if key_field.is_nullable() {
             quote! {
                 match &self.#key_field_name {
                     None => entail::ds::Key::new(#kind_str),
-                    Some(id) => entail::ds::Key::new(#kind_str).with_id(id),
+                    Some(id) => entail::ds::Key::new(#kind_str).with_id(*id),
                 }
             }
         } else {
@@ -434,7 +434,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                 entail::ds::Key::new(#kind_str).with_id(&self.#key_field_name)
             }
         }
-    } else if is_key_type(key_field.ty_path) {
+    } else if is_key_type(key_field.type_path()) {
         if key_field.is_nullable() {
             quote! {
                 match &self.#key_field_name {
@@ -448,7 +448,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
             }
         }
     } else {
-        panic!("Invalid key type at {:?}", &key_field.ty_path.span());
+        panic!("Invalid key type at {:?}", &key_field.type_path().span());
     };
 
     let set_properties: Vec<proc_macro2::TokenStream> = parsed_fields.iter().filter_map(|double_ref_field| {
@@ -514,26 +514,26 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         }
     }).collect();
 
-    let key_value: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.ty_path) || is_string_type(key_field.ty_path) {
+    let key_value: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.type_path()) || is_string_type(key_field.type_path()) {
         if key_field.is_nullable() {
             quote! { e.key().name().map(|name| String::from(name).into()) }
         } else {
             quote! { String::from(e.key().name().unwrap()).into() }
         }
-    } else if key_field.ty_path.is_ident("i64") {
+    } else if key_field.type_path().is_ident("i64") {
         if key_field.is_nullable() {
             quote! { e.key().id() }
         } else {
             quote! { e.key().id().unwrap() }
         }
-    } else if is_key_type(key_field.ty_path) {
+    } else if is_key_type(key_field.type_path()) {
         if key_field.is_nullable() {
             quote! { Some(e.key().clone()) }
         } else {
             quote! { e.key().clone() }
         }
     } else {
-        panic!("Invalid key type at {:?}", &key_field.ty_path.span());
+        panic!("Invalid key type at {:?}", &key_field.type_path().span());
     };
     let key_initializer = quote! { #key_field_name: #key_value };
 
