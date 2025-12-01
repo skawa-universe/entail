@@ -361,13 +361,18 @@ impl<'a> ParsedField<'a> {
     }
 }
 
-fn create_err(text: &str, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+fn create_raw_err(text: &str, span: proc_macro2::Span) -> proc_macro2::TokenStream {
     let err_str = syn::LitStr::new(text, span);
-    quote! { Err(entail::EntailError {
+    quote! { entail::EntailError {
         kind: entail::EntailErrorKind::PropertyMappingError,
         message: #err_str.into(),
         ..entail::EntailError::default()
-    }) }
+    } }
+}
+
+fn create_err(text: &str, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+    let inside = create_raw_err(text, span);
+    quote! { Err(#inside) }
 }
 
 #[proc_macro_derive(Entail, attributes(entail))]
@@ -515,14 +520,14 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     }).collect();
 
     let key_value: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.type_path()) || is_string_type(key_field.type_path()) {
-        let incorrect_key = create_err(format!("Key has no name for entity {}", kind).as_str(), key_field.type_path().span());
+        let incorrect_key = create_raw_err(format!("Key has no name for entity {}", kind).as_str(), key_field.type_path().span());
         if key_field.is_nullable() {
             quote! { e.key().name().map(|name| String::from(name).into()) }
         } else {
             quote! { String::from(e.key().name().ok_or_else(|| #incorrect_key)?).into() }
         }
     } else if key_field.type_path().is_ident("i64") {
-        let incorrect_key = create_err(format!("Key has no id for entity {}", kind).as_str(), key_field.type_path().span());
+        let incorrect_key = create_raw_err(format!("Key has no id for entity {}", kind).as_str(), key_field.type_path().span());
         if key_field.is_nullable() {
             quote! { e.key().id() }
         } else {
