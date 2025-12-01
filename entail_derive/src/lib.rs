@@ -431,7 +431,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
             }
         } else {
             quote! {
-                entail::ds::Key::new(#kind_str).with_id(&self.#key_field_name)
+                entail::ds::Key::new(#kind_str).with_id(self.#key_field_name)
             }
         }
     } else if is_key_type(key_field.type_path()) {
@@ -515,16 +515,18 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     }).collect();
 
     let key_value: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.type_path()) || is_string_type(key_field.type_path()) {
+        let incorrect_key = create_err(format!("Key has no name for entity {}", kind).as_str(), key_field.type_path().span());
         if key_field.is_nullable() {
             quote! { e.key().name().map(|name| String::from(name).into()) }
         } else {
-            quote! { String::from(e.key().name().unwrap()).into() }
+            quote! { String::from(e.key().name().ok_or_else(|| #incorrect_key)?).into() }
         }
     } else if key_field.type_path().is_ident("i64") {
+        let incorrect_key = create_err(format!("Key has no id for entity {}", kind).as_str(), key_field.type_path().span());
         if key_field.is_nullable() {
             quote! { e.key().id() }
         } else {
-            quote! { e.key().id().unwrap() }
+            quote! { e.key().id().ok_or_else(|| #incorrect_key)? }
         }
     } else if is_key_type(key_field.type_path()) {
         if key_field.is_nullable() {

@@ -52,6 +52,17 @@ impl Default for MinimalModel {
 struct AutoId {
     #[entail]
     key: Option<i64>,
+    #[entail(unindexed_nulls)]
+    value: Option<i64>,
+}
+
+#[derive(Entail, Debug, Default)]
+#[entail]
+struct ManualId {
+    #[entail]
+    key: i64,
+    #[entail(unindexed_nulls)]
+    value: Option<i64>,
 }
 
 #[test]
@@ -103,7 +114,10 @@ fn code_gen() {
     assert!(e.is_indexed("nullableBlob"));
     assert_eq!(e.get_value("nullableBlob"), Some(ds::Value::Null).as_ref());
     assert!(e.is_indexed("optBlob"));
-    assert_eq!(e.get_value("optBlob"), Some(ds::Value::blob(vec![4, 5, 6, 7])).as_ref());
+    assert_eq!(
+        e.get_value("optBlob"),
+        Some(ds::Value::blob(vec![4, 5, 6, 7])).as_ref()
+    );
     assert_eq!(
         e.get_value("someBool"),
         Some(ds::Value::boolean(true)).as_ref()
@@ -169,4 +183,16 @@ fn code_gen_auto_id() {
     let auto_with_id = AutoId::from_ds_entity(&e).unwrap();
     assert!(auto_with_id.key.is_some());
     assert_eq!(auto_with_id.key.unwrap(), id);
+
+    let manual_id = ManualId {
+        key: 1234i64,
+        ..ManualId::default()
+    };
+    let mut e = manual_id.to_ds_entity().unwrap();
+    assert_eq!(e.kind(), "ManualId");
+    assert!(e.key().is_complete());
+    assert_eq!(e.key().id(), Some(1234i64));
+    e.set_key(ManualId::adapter().create_key());
+    ManualId::from_ds_entity(&e)
+        .expect_err("Should have returned an error since the key is incomplete");
 }
