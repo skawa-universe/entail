@@ -726,6 +726,11 @@ impl Entity {
             .unwrap_or(false)
     }
 
+    /// Retruns whether a property with the given name exists on this entity.
+    pub fn has(&self, name: &str) -> bool {
+        self.properties.contains_key(name)
+    }
+
     /// Gets a reference to the raw `Value` of a property by name.
     pub fn get_value(&self, name: &str) -> Option<&Value> {
         self.properties.get(name).map(|ev| &ev.value)
