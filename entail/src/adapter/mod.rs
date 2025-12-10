@@ -208,4 +208,33 @@ where
             .await
             .and_then(|query_result| query_result.try_map(Self::consume_entity))
     }
+
+    /// Attempts to deserialize an optional Datastore entity into the target Rust struct `T`.
+    ///
+    /// This method is primarily designed for processing results from batch API calls (like `lookup` or `get_all`)
+    /// where entities may be returned in an `Option` or pulled from a collection where the entity might be missing.
+    ///
+    /// If the entity is `None`, this function returns a `RequiredEntityNotFound` error.
+    ///
+    /// ## Parameters
+    /// - `entity_maybe`: An `Option` containing either the [`ds::Entity`] or a reference to it.
+    ///   The inner entity is accessed via `Borrow`.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing the populated struct instance `T` on success.
+    /// Returns an [`EntailError`] with kind [`EntailErrorKind::RequiredEntityNotFound`] if `entity_maybe` is `None`,
+    /// or a [`PropertyMappingError`] if the deserialization fails.
+    pub fn required_from(
+        &self,
+        entity_maybe: Option<impl Borrow<ds::Entity>>,
+    ) -> Result<T, EntailError> {
+        entity_maybe
+            .map(|e| T::from_ds_entity(e.borrow()))
+            .unwrap_or_else(|| {
+                Err(EntailError::simple(
+                    crate::EntailErrorKind::RequiredEntityNotFound,
+                    format!("Required {} entity not found", self.kind),
+                ))
+            })
+    }
 }

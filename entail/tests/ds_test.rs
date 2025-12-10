@@ -87,7 +87,7 @@ pub async fn create_conflict() -> Result<(), EntailError> {
     Ok(())
 }
 
-#[derive(Entail, Default)]
+#[derive(Entail, Default, Debug)]
 struct Sample {
     #[entail]
     key: String,
@@ -135,5 +135,24 @@ pub async fn test_adapter() -> Result<(), EntailError> {
     assert_eq!(simple.len(), 2);
     assert!(map.get(&key1).is_none());
     assert_eq!(map.get(&key2).unwrap().value, rs.value);
+
+    let missing_entity: Option<Entity> = None;
+    a.required_from(missing_entity)
+        .expect_err("This should have failed");
+    let existing_entity = Some(s.to_ds_entity()?);
+    assert_eq!(
+        a.required_from(existing_entity)
+            .expect("This should be successful")
+            .value,
+        47
+    );
+    let e = s.to_ds_entity()?;
+    let ref_existing_entity = Some(&e);
+    assert_eq!(
+        a.required_from(ref_existing_entity)
+            .expect("This should be successful")
+            .value,
+        47
+    );
     Ok(())
 }
