@@ -37,6 +37,14 @@ where
         }
     }
 
+    /// Returns the Datastore **Kind** name that this `EntityAdapter` is configured for.
+    ///
+    /// This name is derived from the struct name or specified via the
+    /// `#[entail(name = "KindName")]` struct-level attribute.
+    pub fn kind(&self) -> &'static str {
+        self.kind
+    }
+
     /// Converts a Datastore entity into the target Rust struct `T` by consuming the entity.
     ///
     /// This acts as a consuming wrapper around the core [`EntityModel::from_ds_entity`]
