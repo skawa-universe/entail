@@ -156,3 +156,26 @@ pub async fn test_adapter() -> Result<(), EntailError> {
     );
     Ok(())
 }
+
+#[derive(Entail, Default, Debug)]
+struct OptionalKey {
+    #[entail]
+    key: Option<Key>,
+    #[entail]
+    value: i32,
+}
+
+#[tokio::test]
+pub async fn test_optional_key() -> Result<(), EntailError> {
+    let mut model = OptionalKey::default();
+    let entity = model.to_ds_entity()?;
+    assert_eq!(entity.key().kind(), OptionalKey::adapter().kind());
+    assert!(!entity.key().is_complete());
+
+    model.key = Some(OptionalKey::adapter().create_named_key("foo"));
+    let entity = model.to_ds_entity()?;
+    assert_eq!(entity.key().kind(), OptionalKey::adapter().kind());
+    assert_eq!(entity.key().name(), Some("foo"));
+
+    Ok(())
+}
