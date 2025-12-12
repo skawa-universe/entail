@@ -176,7 +176,11 @@ impl DatastoreShell {
         I: IntoIterator,
         I::Item: Borrow<ds::Key>,
     {
-        let mut native_keys = keys.into_iter().map(|key| key.borrow().to_api()).collect();
+        let mut native_keys: Vec<google_datastore1::api::Key> =
+            keys.into_iter().map(|key| key.borrow().to_api()).collect();
+        if native_keys.is_empty() {
+            return Ok(Vec::new());
+        }
         loop {
             let lookup = LookupRequest {
                 database_id: self.database_id.clone(),
@@ -277,6 +281,9 @@ impl DatastoreShell {
             transaction: self.transaction.clone(),
             ..Default::default()
         };
+        if request.mutations.as_ref().filter(|mutations| !mutations.is_empty()).is_none() {
+            return Ok(ds::MutationResponse::default());
+        }
         let response = self
             .hub
             .projects()
@@ -391,6 +398,9 @@ impl DatastoreShell {
             .into_iter()
             .map(|key| key.borrow().to_api())
             .collect();
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         let request = AllocateIdsRequest {
             database_id: self.database_id.clone(),
             keys: Some(keys),
@@ -441,6 +451,9 @@ impl DatastoreShell {
             .into_iter()
             .map(|key| key.borrow().to_api())
             .collect();
+        if keys.is_empty() {
+            return Ok(());
+        }
         let request = ReserveIdsRequest {
             database_id: self.database_id.clone(),
             keys: Some(keys),

@@ -51,7 +51,7 @@ impl Into<google_datastore1::api::Mutation> for Mutation {
 }
 
 /// The response for [`DatastoreShell::commit`]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MutationResponse {
     /// The result of performing the mutations. The i-th mutation result corresponds
     /// to the i-th mutation in the request.
