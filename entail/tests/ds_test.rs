@@ -1,6 +1,6 @@
 mod common;
 
-use common::init_ring;
+use common::{check_server, init_ring};
 use std::{collections::HashSet, sync::Arc};
 
 use entail::{
@@ -26,6 +26,7 @@ fn new_test_key() -> Key {
 
 pub async fn create_conflict() -> Result<(), EntailError> {
     init_ring();
+    check_server();
 
     let ds = DatastoreShell::new("test-project", false, None)
         .await
@@ -98,6 +99,7 @@ struct Sample {
 #[tokio::test]
 pub async fn test_adapter() -> Result<(), EntailError> {
     init_ring();
+    check_server();
 
     let ds = Arc::new(
         DatastoreShell::new("test-project", false, None)

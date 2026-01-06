@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use crate::ds;
-use crate::{EntailError, EntityModel};
+use crate::{EntailError, EntityModel, EntailErrorKind};
 
 /// The `EntityAdapter` provides model-specific utility methods for interacting
 /// with the Datastore kind of its type.
@@ -99,6 +99,20 @@ where
     /// A new, incomplete [`ds::Key`] instance for the model's Kind.
     pub fn create_key(&self) -> ds::Key {
         ds::Key::new(self.kind)
+    }
+
+    /// Checks if the Kind of the provided object matches the Kind associated with this adapter.
+    ///
+    /// This is useful for validating that a [`Key`] or an [`Entity`] belongs to the 
+    /// specific model type handled by this adapter before attempting further operations.
+    ///
+    /// ## Parameters
+    /// - `with_kind`: Any object implementing the [`Kind`] trait (e.g., a [`Key`] or [`Entity`]).
+    ///
+    /// ## Returns
+    /// `true` if the Kind strings are identical; `false` otherwise.
+    pub fn kind_matches<K: ds::Kind>(&self, with_kind: &K) -> bool {
+        self.kind == with_kind.kind()
     }
 
     /// Creates a base Datastore **Query** object targeting this entity's **Kind**.
@@ -223,7 +237,7 @@ where
     /// ## Returns
     /// A [`Result`] containing the populated struct instance `T` on success.
     /// Returns an [`EntailError`] with kind [`EntailErrorKind::RequiredEntityNotFound`] if `entity_maybe` is `None`,
-    /// or a [`PropertyMappingError`] if the deserialization fails.
+    /// or a [`EntailErrorKind::PropertyMappingError`] if the deserialization fails.
     pub fn required_from(
         &self,
         entity_maybe: Option<impl Borrow<ds::Entity>>,
@@ -232,7 +246,7 @@ where
             .map(|e| T::from_ds_entity(e.borrow()))
             .unwrap_or_else(|| {
                 Err(EntailError::simple(
-                    crate::EntailErrorKind::RequiredEntityNotFound,
+                    EntailErrorKind::RequiredEntityNotFound,
                     format!("Required {} entity not found", self.kind),
                 ))
             })

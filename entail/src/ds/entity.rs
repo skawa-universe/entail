@@ -1,6 +1,15 @@
 use super::super::*;
 use std::collections::HashMap;
 
+/// A trait for types that are associated with a Datastore **Kind**.
+///
+/// This is implemented by types that carry a Kind identifier, such as [`Key`] and [`Entity`],
+/// allowing for polymorphic checks against expected Kind names.
+pub trait Kind {
+    /// Returns the string slice representing the Datastore **Kind** of the object.
+    fn kind(&self) -> &str;
+}
+
 /// Represents the specific variant of the last path element of a Datastore Key.
 ///
 /// A key is either incomplete (no ID/name), named, or identified by an integer ID.
@@ -25,6 +34,13 @@ pub struct Key {
     parent: Option<Box<Key>>,
 }
 
+impl Kind for Key {
+    /// Gets a string slice reference to the kind of the entity represented by this Key.
+    fn kind(&self) -> &str {
+        self.kind.as_ref()
+    }
+}
+
 impl Key {
     /// Creates a new **incomplete** Key with only the specified kind.
     ///
@@ -42,8 +58,9 @@ impl Key {
     }
 
     /// Gets a string slice reference to the kind of the entity represented by this Key.
+    #[inline]
     pub fn kind(&self) -> &str {
-        self.kind.as_ref()
+        <Self as Kind>::kind(self)
     }
 
     /// Gets the string name component of the Key, if it has one.
@@ -585,6 +602,13 @@ pub struct Entity {
     properties: HashMap<Cow<'static, str>, PropertyValue>,
 }
 
+impl Kind for Entity {
+    /// Gets a string slice reference to the kind of this entity.
+    fn kind(&self) -> &str {
+        self.key.kind()
+    }
+}
+
 impl Entity {
     /// Creates a new Entity with a complete or incomplete Key.
     pub fn new(key: Key) -> Self {
@@ -617,8 +641,9 @@ impl Entity {
     }
 
     /// Gets a string slice reference to the kind of this entity.
+    #[inline]
     pub fn kind(&self) -> &str {
-        self.key.kind()
+        <Self as Kind>::kind(self)
     }
 
     /// Returns an iterator over all raw property entries (name and `PropertyValue`).
