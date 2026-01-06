@@ -103,11 +103,11 @@ where
 
     /// Checks if the Kind of the provided object matches the Kind associated with this adapter.
     ///
-    /// This is useful for validating that a [`Key`] or an [`Entity`] belongs to the 
+    /// This is useful for validating that a [`ds::Key`] or an [`ds::Entity`] belongs to the 
     /// specific model type handled by this adapter before attempting further operations.
     ///
     /// ## Parameters
-    /// - `with_kind`: Any object implementing the [`Kind`] trait (e.g., a [`Key`] or [`Entity`]).
+    /// - `with_kind`: Any object implementing the [`ds::Kind`] trait (e.g., a [`ds::Key`] or [`ds::Entity`]).
     ///
     /// ## Returns
     /// `true` if the Kind strings are identical; `false` otherwise.
