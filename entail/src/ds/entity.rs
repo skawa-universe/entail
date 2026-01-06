@@ -60,7 +60,7 @@ impl Key {
     /// Gets a string slice reference to the kind of the entity represented by this Key.
     #[inline]
     pub fn kind(&self) -> &str {
-        <Self as Kind>::kind(self)
+        Kind::kind(self)
     }
 
     /// Gets the string name component of the Key, if it has one.
@@ -643,7 +643,7 @@ impl Entity {
     /// Gets a string slice reference to the kind of this entity.
     #[inline]
     pub fn kind(&self) -> &str {
-        <Self as Kind>::kind(self)
+        Kind::kind(self)
     }
 
     /// Returns an iterator over all raw property entries (name and `PropertyValue`).
