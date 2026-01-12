@@ -56,7 +56,7 @@ impl TransactionShell {
     ) -> Result<ds::MutationResponse, EntailError> {
         let result = self.ds.commit(batch).await;
         if result.is_ok() {
-            self.active.store(false, Ordering::SeqCst);
+            self.active.store(false, Ordering::Relaxed);
         }
         result
     }
@@ -78,11 +78,11 @@ impl TransactionShell {
     }
 
     fn make_inactive(&self) {
-        self.active.store(false, Ordering::SeqCst);
+        self.active.store(false, Ordering::Relaxed);
     }
 
     fn is_active(&self) -> bool {
-        self.active.load(Ordering::SeqCst)
+        self.active.load(Ordering::Relaxed)
     }
 }
 
