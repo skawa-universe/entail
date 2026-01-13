@@ -57,6 +57,23 @@ impl Key {
         }
     }
 
+    /// Creates a new `Key` from its raw components.
+    ///
+    /// This is a constant constructor that allows for the manual assembly of a [`Key`] 
+    /// using a specific [`Cow`] kind, [`KeyVariant`], and an optional parent.
+    ///
+    /// ## Parameters
+    /// - `kind`: The Datastore kind name as a [`Cow<'static, str>`].
+    /// - `variant`: The specific [`KeyVariant`] (Name, Id, or Incomplete) for this key.
+    /// - `parent`: An optional boxed parent [`Key`] to establish an entity hierarchy.
+    pub const fn const_new(kind: Cow<'static, str>, variant: KeyVariant, parent: Option<Box<Key>>) -> Self {
+        Key {
+            kind,
+            variant,
+            parent,
+        }
+    }
+
     /// Gets a string slice reference to the kind of the entity represented by this Key.
     #[inline]
     pub fn kind(&self) -> &str {
