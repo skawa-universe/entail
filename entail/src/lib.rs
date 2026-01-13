@@ -143,6 +143,13 @@ use std::{borrow::Cow, fmt};
 /// This trait provides the core functionality for converting between a Rust struct
 /// and a Cloud Datastore entity representation, enabling seamless persistence.
 pub trait EntityModel: Sized {
+    /// The Datastore **Kind** associated with this entity model.
+    ///
+    /// This constant is automatically populated by the `#[derive(Entail)]` macro,
+    /// using either the struct's name or the value provided in the 
+    /// `#[entail(name = "...")]` attribute.
+    const KIND: &'static str;
+
     /// Converts the Rust struct instance into an `entail::Entity` (aliased as `ds::Entity`).
     ///
     /// This method maps the struct's fields to Datastore properties, applying any

@@ -630,6 +630,8 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         static #adapter_name: entail::EntityAdapter<#name> = entail::EntityAdapter::new(#kind_str);
 
         impl #impl_generics entail::EntityModel for #name #type_generics #where_clause {
+            const KIND: &'static str = #kind_str;
+
             fn from_ds_entity(e: &entail::ds::Entity) -> Result<Self, entail::EntailError> {
                 let null_value = entail::ds::Value::Null;
                 if e.kind() != #kind_str {
