@@ -281,7 +281,12 @@ impl DatastoreShell {
             transaction: self.transaction.clone(),
             ..Default::default()
         };
-        if request.mutations.as_ref().filter(|mutations| !mutations.is_empty()).is_none() {
+        if request
+            .mutations
+            .as_ref()
+            .filter(|mutations| !mutations.is_empty())
+            .is_none()
+        {
             return Ok(ds::MutationResponse::default());
         }
         let response = self

@@ -1,11 +1,11 @@
 mod entity;
-mod shell;
-mod query;
 mod mutation;
+mod query;
+mod shell;
 mod transaction;
 
 pub use entity::*;
-pub use shell::*;
-pub use query::*;
 pub use mutation::*;
+pub use query::*;
+pub use shell::*;
 pub use transaction::*;

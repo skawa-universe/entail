@@ -30,7 +30,8 @@ pub fn check_server() {
                     $ docker-compose up -d\n\
                     ==========================================================\n\
                     \x1b[0m",
-                    name.to_uppercase(), addr
+                    name.to_uppercase(),
+                    addr
                 );
             }
         }

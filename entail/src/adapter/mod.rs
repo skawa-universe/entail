@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use crate::ds;
-use crate::{EntailError, EntityModel, EntailErrorKind};
+use crate::{EntailError, EntailErrorKind, EntityModel};
 
 /// The `EntityAdapter` provides model-specific utility methods for interacting
 /// with the Datastore kind of its type.
@@ -103,7 +103,7 @@ where
 
     /// Checks if the Kind of the provided object matches the Kind associated with this adapter.
     ///
-    /// This is useful for validating that a [`ds::Key`] or an [`ds::Entity`] belongs to the 
+    /// This is useful for validating that a [`ds::Key`] or an [`ds::Entity`] belongs to the
     /// specific model type handled by this adapter before attempting further operations.
     ///
     /// ## Parameters

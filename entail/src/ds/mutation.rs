@@ -145,7 +145,7 @@ impl MutationBatch {
     /// - `new_mutations`: An iterable of mutation operations to add.
     pub fn add_all<I>(self, new_mutations: I) -> Self
     where
-        I: IntoIterator<Item = Mutation>
+        I: IntoIterator<Item = Mutation>,
     {
         let mut mutations = self.mutations;
         mutations.extend(new_mutations.into_iter().map(Into::into));
@@ -186,7 +186,7 @@ impl MutationBatch {
     /// Entities in the iterable must not already exist in the Datastore for the operation to succeed.
     pub fn insert_all<I>(self, entities: I) -> Self
     where
-        I: IntoIterator<Item = Entity>
+        I: IntoIterator<Item = Entity>,
     {
         self.add_all(entities.into_iter().map(Mutation::Insert))
     }
@@ -196,7 +196,7 @@ impl MutationBatch {
     /// Entities in the iterable must already exist in the Datastore for the operation to succeed.
     pub fn update_all<I>(self, entities: I) -> Self
     where
-        I: IntoIterator<Item = Entity>
+        I: IntoIterator<Item = Entity>,
     {
         self.add_all(entities.into_iter().map(Mutation::Update))
     }
@@ -206,7 +206,7 @@ impl MutationBatch {
     /// This will either insert new entities or overwrite existing ones.
     pub fn upsert_all<I>(self, entities: I) -> Self
     where
-        I: IntoIterator<Item = Entity>
+        I: IntoIterator<Item = Entity>,
     {
         self.add_all(entities.into_iter().map(Mutation::Upsert))
     }
@@ -217,7 +217,7 @@ impl MutationBatch {
     /// will not fail if any of the entities do not exist.
     pub fn delete_all<I>(self, keys: I) -> Self
     where
-        I: IntoIterator<Item = Key>
+        I: IntoIterator<Item = Key>,
     {
         self.add_all(keys.into_iter().map(Mutation::Delete))
     }

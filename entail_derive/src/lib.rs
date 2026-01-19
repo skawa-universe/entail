@@ -1,9 +1,11 @@
-use darling::{FromField, FromDeriveInput};
-use proc_macro::TokenStream;
-use quote::{quote, format_ident};
-use syn::{parse_macro_input, DeriveInput, GenericArgument, PathArguments, Type, Ident, Fields, Field};
-use syn::spanned::Spanned;
 use convert_case::{Case, Casing};
+use darling::{FromDeriveInput, FromField};
+use proc_macro::TokenStream;
+use quote::{format_ident, quote};
+use syn::spanned::Spanned;
+use syn::{
+    DeriveInput, Field, Fields, GenericArgument, Ident, PathArguments, Type, parse_macro_input,
+};
 
 /// Checks if the given `syn::Path` represents a `String` type.
 /// This function handles both simple "String" and fully qualified "std::string::String".
@@ -28,10 +30,7 @@ fn is_string_type(path: &syn::Path) -> bool {
         }
 
         // Handle "std::string::String"
-        if segments.len() == 3
-            && segments[0].ident == "std"
-            && segments[1].ident == "string"
-        {
+        if segments.len() == 3 && segments[0].ident == "std" && segments[1].ident == "string" {
             return true;
         }
     }
@@ -67,11 +66,11 @@ fn is_custom_type(path: &syn::Path, type_segments: &[&str]) -> bool {
     }
 
     // Compare segments from the end, backwards, to find a suffix match.
-    path.segments.iter().rev()
+    path.segments
+        .iter()
+        .rev()
         .zip(type_segments.iter().rev())
-        .all(|(path_segment, type_str)| {
-            path_segment.ident.to_string() == *type_str
-        })
+        .all(|(path_segment, type_str)| path_segment.ident.to_string() == *type_str)
 }
 
 const KEY_TYPE_PATH: &[&str] = &["entail", "ds", "Key"];
@@ -103,9 +102,10 @@ fn is_cow_static_str_type(path: &syn::Path) -> bool {
         // 2. Handle simple "Cow" or fully qualified "std::borrow::Cow"
         let is_base_cow_path = match segments.len() {
             1 => true, // Simple "Cow"
-            3 => { // "std::borrow::Cow"
+            3 => {
+                // "std::borrow::Cow"
                 segments[0].ident == "std" && segments[1].ident == "borrow"
-            },
+            }
             _ => false, // Any other length is not a valid Cow path we're looking for
         };
 
@@ -121,23 +121,25 @@ fn is_cow_static_str_type(path: &syn::Path) -> bool {
             }
 
             // Check the first argument: should be a 'static lifetime
-            let is_static_lifetime = if let Some(GenericArgument::Lifetime(lifetime)) = args.args.first() {
-                lifetime.ident == "static"
-            } else {
-                false
-            };
+            let is_static_lifetime =
+                if let Some(GenericArgument::Lifetime(lifetime)) = args.args.first() {
+                    lifetime.ident == "static"
+                } else {
+                    false
+                };
 
             if !is_static_lifetime {
                 return false;
             }
 
             // Check the second argument: should be the `str` type
-            let is_str_type = if let Some(GenericArgument::Type(Type::Path(type_path))) = args.args.last() {
-                // For `str`, it's usually just `str` as a single segment
-                type_path.path.segments.len() == 1 && type_path.path.segments[0].ident == "str"
-            } else {
-                false
-            };
+            let is_str_type =
+                if let Some(GenericArgument::Type(Type::Path(type_path))) = args.args.last() {
+                    // For `str`, it's usually just `str` as a single segment
+                    type_path.path.segments.len() == 1 && type_path.path.segments[0].ident == "str"
+                } else {
+                    false
+                };
 
             return is_str_type; // Both lifetime and type must match
         }
@@ -168,10 +170,7 @@ fn is_option_type(path: &syn::Path) -> bool {
         }
 
         // Handle "std::option::Option"
-        if segments.len() == 3
-            && segments[0].ident == "std"
-            && segments[1].ident == "option"
-        {
+        if segments.len() == 3 && segments[0].ident == "std" && segments[1].ident == "option" {
             return true;
         }
     }
@@ -202,10 +201,7 @@ fn is_vec_type(path: &syn::Path) -> bool {
         }
 
         // Handle the fully qualified "std::vec::Vec" case (e.g., `std::vec::Vec<i32>`)
-        if segments.len() == 3
-            && segments[0].ident == "std"
-            && segments[1].ident == "vec"
-        {
+        if segments.len() == 3 && segments[0].ident == "std" && segments[1].ident == "vec" {
             return true;
         }
     }
@@ -321,15 +317,23 @@ impl<'a> ParsedField<'a> {
             }
         };
 
-        Some(ParsedField { name, ty_path, attrs, property_name })
+        Some(ParsedField {
+            name,
+            ty_path,
+            attrs,
+            property_name,
+        })
     }
 
-    fn is_nullable(&self) -> bool { is_option_type(&self.ty_path) }
+    fn is_nullable(&self) -> bool {
+        is_option_type(&self.ty_path)
+    }
 
     fn is_array(&self) -> bool {
-        is_vec_type(&self.ty_path) ||
-            get_inner_type(self.ty_path)
-                .map(is_vec_type).unwrap_or(false)
+        is_vec_type(&self.ty_path)
+            || get_inner_type(self.ty_path)
+                .map(is_vec_type)
+                .unwrap_or(false)
     }
 
     fn type_path(&self) -> &'a syn::Path {
@@ -337,10 +341,12 @@ impl<'a> ParsedField<'a> {
             &self.ty_path
         } else {
             let last_segment = &self.ty_path.segments.last().unwrap();
-            match get_inner_type(self.ty_path).and_then(|e| if self.is_nullable() && self.is_array() {
-                get_inner_type(e)
-            } else {
-                Some(e)
+            match get_inner_type(self.ty_path).and_then(|e| {
+                if self.is_nullable() && self.is_array() {
+                    get_inner_type(e)
+                } else {
+                    Some(e)
+                }
             }) {
                 Some(path) => path,
                 None => panic!("Unrecognized argument in {:?}", &last_segment.span()),
@@ -388,23 +394,33 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     let kind = entail_input.name.as_ref().unwrap_or(&raw_name).as_str();
     let kind_str = syn::LitStr::new(kind, name.span());
     let fields = match &input.data {
-        syn::Data::Struct(syn::DataStruct { fields: Fields::Named(fields), .. }) => &fields.named,
+        syn::Data::Struct(syn::DataStruct {
+            fields: Fields::Named(fields),
+            ..
+        }) => &fields.named,
         _ => panic!("Entail can only be derived for structs with named fields"),
     };
 
-    let all_fields: Vec<ParsedFieldPair> = fields.iter()
-        .map(|field| ParsedFieldPair { field, parsed_field: ParsedField::build(&field, &entail_input) })
-        .filter(|fp| { fp.parsed_field.is_some() })
+    let all_fields: Vec<ParsedFieldPair> = fields
+        .iter()
+        .map(|field| ParsedFieldPair {
+            field,
+            parsed_field: ParsedField::build(&field, &entail_input),
+        })
+        .filter(|fp| fp.parsed_field.is_some())
         .collect();
-    let parsed_fields: Vec<&ParsedField> = all_fields.iter()
-        .filter_map(|f| { f.parsed_field.as_ref() })
+    let parsed_fields: Vec<&ParsedField> = all_fields
+        .iter()
+        .filter_map(|f| f.parsed_field.as_ref())
         .collect();
-    let key_field: &ParsedField = parsed_fields.iter()
+    let key_field: &ParsedField = parsed_fields
+        .iter()
         .filter(|pf| pf.attrs.key || !pf.attrs.field && pf.name.to_string() == "key")
         .try_fold(None, |acc, item| match &acc {
             None => Ok(Some(item)),
             Some(_) => Err(()),
-        }).ok()
+        })
+        .ok()
         .unwrap_or_else(|| panic!("Multiple primary keys found on {:?}", &name.span()))
         .unwrap_or_else(|| panic!("No primary key found on {:?}", &name.span()));
 
@@ -413,48 +429,49 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     }
 
     let key_field_name: &Ident = key_field.name;
-    let entity_key_new: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.type_path()) || is_string_type(key_field.type_path()) {
-        if key_field.is_nullable() {
-            quote! {
-                match &self.#key_field_name {
-                    None => entail::ds::Key::new(#kind_str),
-                    Some(name) => entail::ds::Key::new(#kind_str).with_name(name.clone()),
+    let entity_key_new: proc_macro2::TokenStream =
+        if is_cow_static_str_type(key_field.type_path()) || is_string_type(key_field.type_path()) {
+            if key_field.is_nullable() {
+                quote! {
+                    match &self.#key_field_name {
+                        None => entail::ds::Key::new(#kind_str),
+                        Some(name) => entail::ds::Key::new(#kind_str).with_name(name.clone()),
+                    }
+                }
+            } else {
+                quote! {
+                    entail::ds::Key::new(#kind_str).with_name(self.#key_field_name.clone())
+                }
+            }
+        } else if key_field.type_path().is_ident("i64") {
+            if key_field.is_nullable() {
+                quote! {
+                    match &self.#key_field_name {
+                        None => entail::ds::Key::new(#kind_str),
+                        Some(id) => entail::ds::Key::new(#kind_str).with_id(*id),
+                    }
+                }
+            } else {
+                quote! {
+                    entail::ds::Key::new(#kind_str).with_id(self.#key_field_name)
+                }
+            }
+        } else if is_key_type(key_field.type_path()) {
+            if key_field.is_nullable() {
+                quote! {
+                    match &self.#key_field_name {
+                        None => entail::ds::Key::new(#kind_str),
+                        Some(key) => key.clone(),
+                    }
+                }
+            } else {
+                quote! {
+                    self.#key_field_name.clone()
                 }
             }
         } else {
-            quote! {
-                entail::ds::Key::new(#kind_str).with_name(self.#key_field_name.clone())
-            }
-        }
-    } else if key_field.type_path().is_ident("i64") {
-        if key_field.is_nullable() {
-            quote! {
-                match &self.#key_field_name {
-                    None => entail::ds::Key::new(#kind_str),
-                    Some(id) => entail::ds::Key::new(#kind_str).with_id(*id),
-                }
-            }
-        } else {
-            quote! {
-                entail::ds::Key::new(#kind_str).with_id(self.#key_field_name)
-            }
-        }
-    } else if is_key_type(key_field.type_path()) {
-        if key_field.is_nullable() {
-            quote! {
-                match &self.#key_field_name {
-                    None => entail::ds::Key::new(#kind_str),
-                    Some(key) => key.clone(),
-                }
-            }
-        } else {
-            quote! {
-                self.#key_field_name.clone()
-            }
-        }
-    } else {
-        panic!("Invalid key type at {:?}", &key_field.type_path().span());
-    };
+            panic!("Invalid key type at {:?}", &key_field.type_path().span());
+        };
 
     let set_properties: Vec<proc_macro2::TokenStream> = parsed_fields.iter().filter_map(|double_ref_field| {
         let f: &ParsedField = *double_ref_field;
@@ -467,7 +484,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         let nullable: bool = f.is_nullable();
         let path: &syn::Path = f.type_path();
         let array: bool = !path.is_ident("u8") && f.is_array();
-        
+
         let index_values = !f.attrs.text && (!f.attrs.unindexed || f.attrs.indexed);
         let index_nulls = !f.attrs.unindexed_nulls && !f.attrs.unindexed;
 
@@ -519,29 +536,36 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
         }
     }).collect();
 
-    let key_value: proc_macro2::TokenStream = if is_cow_static_str_type(key_field.type_path()) || is_string_type(key_field.type_path()) {
-        let incorrect_key = create_raw_err(format!("Key has no name for entity {}", kind).as_str(), key_field.type_path().span());
-        if key_field.is_nullable() {
-            quote! { e.key().name().map(|name| String::from(name).into()) }
+    let key_value: proc_macro2::TokenStream =
+        if is_cow_static_str_type(key_field.type_path()) || is_string_type(key_field.type_path()) {
+            let incorrect_key = create_raw_err(
+                format!("Key has no name for entity {}", kind).as_str(),
+                key_field.type_path().span(),
+            );
+            if key_field.is_nullable() {
+                quote! { e.key().name().map(|name| String::from(name).into()) }
+            } else {
+                quote! { String::from(e.key().name().ok_or_else(|| #incorrect_key)?).into() }
+            }
+        } else if key_field.type_path().is_ident("i64") {
+            let incorrect_key = create_raw_err(
+                format!("Key has no id for entity {}", kind).as_str(),
+                key_field.type_path().span(),
+            );
+            if key_field.is_nullable() {
+                quote! { e.key().id() }
+            } else {
+                quote! { e.key().id().ok_or_else(|| #incorrect_key)? }
+            }
+        } else if is_key_type(key_field.type_path()) {
+            if key_field.is_nullable() {
+                quote! { Some(e.key().clone()) }
+            } else {
+                quote! { e.key().clone() }
+            }
         } else {
-            quote! { String::from(e.key().name().ok_or_else(|| #incorrect_key)?).into() }
-        }
-    } else if key_field.type_path().is_ident("i64") {
-        let incorrect_key = create_raw_err(format!("Key has no id for entity {}", kind).as_str(), key_field.type_path().span());
-        if key_field.is_nullable() {
-            quote! { e.key().id() }
-        } else {
-            quote! { e.key().id().ok_or_else(|| #incorrect_key)? }
-        }
-    } else if is_key_type(key_field.type_path()) {
-        if key_field.is_nullable() {
-            quote! { Some(e.key().clone()) }
-        } else {
-            quote! { e.key().clone() }
-        }
-    } else {
-        panic!("Invalid key type at {:?}", &key_field.type_path().span());
-    };
+            panic!("Invalid key type at {:?}", &key_field.type_path().span());
+        };
     let key_initializer = quote! { #key_field_name: #key_value };
 
     let initializers: Vec<proc_macro2::TokenStream> = all_fields.iter().filter_map(|pair| {
@@ -597,7 +621,7 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
                         }
                     }
             }
-            let initializer = 
+            let initializer =
                 if f.is_array() && path.is_ident("u8") {
                     gen_initializer!(Blob, (val.clone()))
                 } else if is_string_type(path) {
@@ -625,7 +649,10 @@ pub fn derive_entail(input: TokenStream) -> TokenStream {
     }).collect();
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
     let adapter_name = format_ident!("_{}_ADAPTER", name.to_string().to_case(Case::Constant));
-    let mismatch_template = quote::ToTokens::to_token_stream(&format!("Expected an Entity with the kind {}, but got {{}}", kind));
+    let mismatch_template = quote::ToTokens::to_token_stream(&format!(
+        "Expected an Entity with the kind {}, but got {{}}",
+        kind
+    ));
     let generated = quote! {
         static #adapter_name: entail::EntityAdapter<#name> = entail::EntityAdapter::new(#kind_str);
 
