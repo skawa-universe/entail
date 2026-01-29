@@ -782,9 +782,19 @@ impl Entity {
         self.properties.get(name).map(|ev| &ev.value)
     }
 
+    /// Gets a mutable reference to the raw `Value` of a property by name.
+    pub fn get_mut_value(&mut self, name: &str) -> Option<&mut Value> {
+        self.properties.get_mut(name).map(|ev| &mut ev.value)
+    }
+
     /// Gets a reference to the full `PropertyValue` (including indexing) of a property by name.
     pub fn get(&self, name: &str) -> Option<&PropertyValue> {
         self.properties.get(name)
+    }
+
+    /// Gets a mutable reference to the full `PropertyValue` (including indexing) of a property by name.
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut PropertyValue> {
+        self.properties.get_mut(name)
     }
 
     /// Removes a property by name returning the raw property value if the entity previously had the property.
