@@ -1,5 +1,3 @@
-use rand::RngCore;
-
 use super::super::*;
 use super::*;
 
@@ -285,7 +283,7 @@ impl<'a> Transaction<'a> {
         let mut last_error: Option<google_datastore1::Error> = None;
         let mut last_txn: Option<Vec<u8>> = None;
         let mut current_delay = self.first_retry;
-        let mut rng = rand::rng();
+        let mut rng = fastrand::Rng::default();
         loop {
             if retries_left == 0 {
                 return Err(EntailError {
@@ -333,7 +331,7 @@ impl<'a> Transaction<'a> {
                                 (current_delay.as_micros() >> if backoff { 0 } else { 1 }) as u64;
                             let max = next_delay.as_micros() as u64;
                             let val = if max > min {
-                                rng.next_u64() % (max - min) + min
+                                rng.u64(min..max)
                             } else {
                                 max
                             };
