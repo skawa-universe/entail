@@ -1,9 +1,13 @@
+mod model_update;
+
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use crate::ds;
 use crate::{EntailError, EntailErrorKind, EntityModel};
+
+pub use model_update::*;
 
 /// The `EntityAdapter` provides model-specific utility methods for interacting
 /// with the Datastore kind of its type.
@@ -221,6 +225,70 @@ where
         ds.run_query(query)
             .await
             .and_then(|query_result| query_result.try_map(Self::consume_entity))
+    }
+
+    /// Fetches a single entity by key and wraps it in a [`ModeledUpdate`] for partial updates.
+    ///
+    /// This is a convenience method that combines a Datastore lookup with model deserialization. 
+    /// If the entity is found, it is returned inside a container that tracks both the 
+    /// strongly-typed model and the original raw entity properties.
+    ///
+    /// ## Parameters
+    /// - `ds`: A reference to the Datastore client shell.
+    /// - `key`: The complete [`ds::Key`] of the entity to retrieve.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing the [`ModeledUpdate`] instance. Returns a 
+    /// `RequiredEntityNotFound` error if the key does not exist in Datastore.
+    pub async fn update_single(
+        &self,
+        ds: &ds::DatastoreShell,
+        key: ds::Key,
+    ) -> Result<ModeledUpdate<T>, EntailError> {
+        let key_string = key.to_string();
+        ds.get_single(key)
+            .await
+            .transpose()
+            .unwrap_or_else(|| {
+                Err(EntailError::simple(
+                    crate::EntailErrorKind::RequiredEntityNotFound,
+                    format!("Required {} not found", key_string),
+                ))
+            })
+            .and_then(|e| ModeledUpdate::new(e))
+    }
+
+    /// Fetches a batch of entities and wraps each found entity in a [`ModeledUpdate`].
+    ///
+    /// Similar to `fetch_all`, but returns `ModeledUpdate` containers instead of raw models. 
+    /// This allows for batch updates that preserve unmodeled properties for every entity in 
+    /// the set.
+    ///
+    /// ## Parameters
+    /// - `ds`: A reference to the Datastore client shell.
+    /// - `keys`: An iterable collection of [`ds::Key`]s or references to them.
+    ///
+    /// ## Returns
+    /// A [`Result`] containing a `HashMap` mapping keys to their corresponding 
+    /// [`ModeledUpdate`] instances. Entities not found in Datastore are omitted 
+    /// from the map.
+    pub async fn update_all<I>(
+        &self,
+        ds: &ds::DatastoreShell,
+        keys: I,
+    ) -> Result<HashMap<ds::Key, ModeledUpdate<T>>, EntailError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ds::Key>,
+    {
+        let result = ds.get_all(keys).await?;
+        let mut map = HashMap::with_capacity(result.len());
+        for entity in result.into_iter() {
+            let model = ModeledUpdate::new(entity)?;
+            let key = model.entity.key().clone();
+            map.insert(key, model);
+        }
+        Ok(map)
     }
 
     /// Attempts to deserialize an optional Datastore entity into the target Rust struct `T`.

@@ -806,6 +806,34 @@ impl Entity {
     pub fn remove(&mut self, name: &str) -> Option<PropertyValue> {
         self.properties.remove(name)
     }
+
+    /// Copies all properties from another entity into this one.
+    ///
+    /// If a property with the same name already exists in this entity, its value,
+    /// indexing status, and meaning hint will be overwritten by the property 
+    /// from the other entity.
+    ///
+    /// ## Parameters
+    /// - `other`: A reference to the [`Entity`] from which properties will be cloned.
+    pub fn set_properties_from(&mut self, other: &Entity) {
+        for (key, value) in other.properties.iter() {
+            self.properties.insert(key.clone(), value.clone());
+        }
+    }
+
+    /// Moves all properties from another entity into this one, consuming the other entity's properties.
+    ///
+    /// This is more efficient than `set_properties_from` as it avoids cloning the property 
+    /// names and values. Existing properties in this entity will be overwritten if they 
+    /// share a name with properties in the `other` entity.
+    ///
+    /// ## Parameters
+    /// - `other`: The [`Entity`] to consume properties from.
+    pub fn consume_properties_from(&mut self, other: Entity) {
+        for (key, value) in other.properties {
+            self.properties.insert(key, value);
+        }
+    }
 }
 
 impl fmt::Display for Entity {
