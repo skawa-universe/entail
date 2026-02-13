@@ -181,7 +181,18 @@ impl DatastoreShell {
         if native_keys.is_empty() {
             return Ok(Vec::new());
         }
+        let mut rest = if native_keys.len() > 1000 {
+            native_keys.split_off(1000)
+        } else {
+            Vec::new()
+        };
+        let mut result = Vec::new();
         loop {
+            if !rest.is_empty() && native_keys.len() < 1000 {
+                let space = 1000 - native_keys.len();
+                let start = rest.len().saturating_sub(space);
+                native_keys.extend(rest.drain(start..));
+            }
             let lookup = LookupRequest {
                 database_id: self.database_id.clone(),
                 read_options: Some(self.build_read_options()),
@@ -197,14 +208,13 @@ impl DatastoreShell {
             match response {
                 Ok((_, lr)) => {
                     let deferred = lr.deferred.unwrap_or_default();
-                    let e: Vec<ds::Entity> = lr
+                    result.extend(lr
                         .found
                         .unwrap_or_default()
                         .into_iter()
-                        .map(|er| er.entity.unwrap().into())
-                        .collect();
-                    if deferred.is_empty() {
-                        return Ok(e);
+                        .map(|er| er.entity.unwrap().into()));
+                    if deferred.is_empty() && rest.is_empty() {
+                        return Ok(result);
                     } else {
                         native_keys = deferred;
                     }

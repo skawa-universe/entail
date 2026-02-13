@@ -181,3 +181,37 @@ pub async fn test_optional_key() -> Result<(), EntailError> {
 
     Ok(())
 }
+
+#[tokio::test]
+pub async fn test_retrieve_thousands() -> Result<(), EntailError> {
+    init_ring();
+    check_server();
+
+    let ds = Arc::new(
+        DatastoreShell::new(
+            "test-project",
+            false,
+            Some(format!("db{}", fastrand::i64(..))),
+        )
+        .await
+        .map_err(|_| Default::default())?,
+    );
+
+    ds.commit(MutationBatch::new().upsert(Entity::new(Key::new("Foo").with_id(3782))))
+        .await?;
+
+    let result = ds
+        .get_all(
+            (1..10000)
+                .into_iter()
+                .map(|n| Key::new("Foo").with_id(n))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+
+    assert_eq!(result.len(), 1);
+    let only_item = result.into_iter().next().expect("One item expected");
+    assert_eq!(only_item.key().id(), Some(3782));
+
+    Ok(())
+}
